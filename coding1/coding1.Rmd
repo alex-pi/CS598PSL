@@ -1,0 +1,279 @@
+---
+title: "Coding 1 - PSL 598, Fall 2022"
+author: "Alejandro Pimentel (ap41)"
+date: ''
+output:
+  html_document: 
+    theme: readable
+    toc: yes
+    code_folding: show
+  pdf_document: default
+urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{css, echo=FALSE}
+p, li, td {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+```
+
+```{r}
+# Set a seed to have a stable generation of random numbers
+uin_4 = 2110
+set.seed(uin_4)
+```
+
+
+# Generate Centers
+
+```{r message=FALSE, warning=FALSE, class.source = 'fold-hide'}
+
+library(ggplot2)
+library(class)
+
+p = 2;      
+csize = 10;     # number of centers
+sigma = 1;      # sd for generating the centers 
+m1 = matrix(rnorm(csize*p), csize, p)*sigma + 
+  cbind( rep(1, csize), rep(0, csize))
+m0 = matrix(rnorm(csize*p), csize, p)*sigma + 
+  cbind( rep(0, csize), rep(1, csize))
+```
+
+# Generate Data
+
+```{r message=FALSE, warning=FALSE, class.source = 'fold-hide'}
+sim_params = list(
+ csize = 10,      # number of centers
+ p = 2,           # dimension
+ s = sqrt(1/5),   # standard deviation for generating data
+ n = 100,         # training size per class
+ N = 5000,        # test size per class
+ m0 = m0,         # 10 centers for class 0
+ m1 = m1         # 10 centers for class 1
+)
+
+generate_sim_data = function(sim_params){
+  p = sim_params$p
+  s = sim_params$s 
+  n = sim_params$n 
+  N = sim_params$N 
+  m1 = sim_params$m1 
+  m0 = sim_params$m0
+  csize = sim_params$csize
+  
+  id1 = sample(1:csize, n, replace = TRUE);
+  id0 = sample(1:csize, n, replace = TRUE);
+  Xtrain = matrix(rnorm(2*n*p), 2*n, p)*s + rbind(m1[id1,], m0[id0,])
+  Ytrain = factor(c(rep(1,n), rep(0,n)))
+  id1 = sample(1:csize, N, replace=TRUE);
+  id0 = sample(1:csize, N, replace=TRUE); 
+  Xtest = matrix(rnorm(2*N*p), 2*N, p)*s + rbind(m1[id1,], m0[id0,])
+  Ytest = factor(c(rep(1,N), rep(0,N)))
+  
+  
+  # Return the training/test data along with labels
+  list(
+  Xtrain = Xtrain,
+  Ytrain = Ytrain,
+  Xtest = Xtest,
+  Ytest = Ytest
+  )
+}
+```
+
+```{r}
+mydata = generate_sim_data(sim_params)
+```
+
+# Visualization
+
+```{r warning=FALSE, class.source = 'fold-hide'}
+tmp.X = mydata$Xtrain
+tmp.Y = mydata$Ytrain
+m0 = sim_params$m0        # 10 centers for class 0
+m1 = sim_params$m1  
+
+n = nrow(tmp.X)
+mycol = rep("blue", n)
+mycol[tmp.Y == 0] = "red"
+plot(tmp.X[, 1], tmp.X[, 2], type = "n", xlab = "", ylab = "")
+points(tmp.X[, 1], tmp.X[, 2], col = mycol);
+points(m1[, 1], m1[, 2], pch = "+", cex = 2, col = "blue");    
+points(m0[, 1], m0[, 2], pch = "+", cex = 2, col = "red");   
+legend("bottomright", pch = c(1,1), col = c("red", "blue"), 
+       legend = c("class 0", "class 1")) 
+```
+
+# Part I: KNN
+
+```{r}
+my_knn = function(traindata, testdata, Ytrain, k) {
+  
+  Ypred <- vector(mode = 'integer', length = dim(testdata)[1])
+  
+  for (i in 1:dim(testdata)[1]) {
+    dist = rowSums(sweep(traindata, 2, testdata[i,])^2)
+    k_nearest_classes = cbind(dist, Ytrain)[order(dist)[1:k], , drop=F]
+    k_nearest_classes = data.frame(k_nearest_classes)
+    
+    voted_max = as.integer(names(which.max(table(k_nearest_classes$Ytrain)))[1])
+    Ypred[i] = voted_max - 1
+  }
+  
+  factor(Ypred)
+}
+
+traindata = mydata$Xtrain
+testdata = mydata$Xtest
+Ytrain = mydata$Ytrain
+Ytest = mydata$Ytest
+N = sim_params$N
+```
+
+## Handling distance and voting ties.
+
+When `k` is an odd number my algorithm does not have voting ties.
+When `k` is even, I simply select the first class from the max operation: `which.max(table(k_nearest_classes$Ytrain))`
+
+Similarly, for distance ties, I take the `k` smallest distances according to R's `order` function.
+
+See an example below when `k=4` and there is a voting tie.
+
+```{r}
+k=4
+diff_idx = 502
+diff_point = testdata[diff_idx, , drop=FALSE]
+
+dist = rowSums(sweep(traindata, 2, diff_point)^2)
+k_nearest_classes = cbind(dist, Ytrain)[order(dist)[1:k], , drop=F]
+(k_nearest_classes = data.frame(k_nearest_classes))
+names(which.max(table(k_nearest_classes$Ytrain)))[1]
+```
+
+
+## Using my slow knn
+
+```{r}
+
+test.pred.k1 = my_knn(traindata, testdata, Ytrain, k = 1)
+test.pred.k3 = my_knn(traindata, testdata, Ytrain, k = 3)
+test.pred.k5 = my_knn(traindata, testdata, Ytrain, k = 5)
+test.err.k1 = sum(Ytest != test.pred.k1)/(2*N)
+test.err.k3 = sum(Ytest != test.pred.k3)/(2*N)
+test.err.k5 = sum(Ytest != test.pred.k5)/(2*N)
+```
+
+## Using knn from class lib
+
+```{r}
+## 
+test.pred.ck1 = knn(traindata, testdata, Ytrain, k = 1)
+test.pred.ck3 = knn(traindata, testdata, Ytrain, k = 3)
+test.pred.ck5 = knn(traindata, testdata, Ytrain, k = 5)
+test.err.ck1 = sum(Ytest != test.pred.ck1)/(2*N)
+test.err.ck3 = sum(Ytest != test.pred.ck3)/(2*N)
+test.err.ck5 = sum(Ytest != test.pred.ck5)/(2*N)
+```
+
+## Comparing kNN predictions with contingency tables
+
+```{r}
+table(test.pred.k1, test.pred.ck1)
+table(test.pred.k3, test.pred.ck3)
+table(test.pred.k5, test.pred.ck5)
+```
+
+When `k=3` there is discrepancy due to the distance tolerance the `kNN` algorithm uses. In this case the 3th and 4th distances for the test point in question are very close, `kNN` then includes the 4th distance in the voting. So for `kNN`, the probability for the classes is tied (i.e. 0.5) in such cases.
+
+```{r}
+k=4
+diff_idx = which(test.pred.k3 != test.pred.ck3)
+diff_point = testdata[diff_idx, , drop=FALSE]
+
+dist = rowSums(sweep(traindata, 2, diff_point)^2)
+k_nearest_classes = cbind(dist, Ytrain)[order(dist)[1:k], , drop=F]
+data.frame(k_nearest_classes)
+```
+
+# Part II: cv-KNN
+
+## Compute CV Errors
+
+The function below computes the Cross Validation Error for a given `k`.
+
+```{r}
+
+compute_cv_error <- function(traindata, Ytrain, k = 1, foldNum = 10){
+
+  n = nrow(traindata)
+  fold_size = floor(n/foldNum)
+  error = 0
+  random_idx = sample(1 : n)
+  for(runId in 1:foldNum){
+    # this line produces sets like (when foldNum=10 and n=100): 1:10, 11:20 ... 91:100
+    testSetIndex = ((runId-1)*fold_size + 1):(ifelse(runId == foldNum, n, runId*fold_size))
+    testSetIndex = random_idx[testSetIndex]
+    trainX = traindata[-testSetIndex, ]
+    trainY = Ytrain[-testSetIndex]
+    testX = traindata[testSetIndex, ]
+    testY = Ytrain[testSetIndex]
+    predictY = knn(trainX, testX, trainY, k)
+    error = error + sum(predictY != testY) 
+  }
+  error = error / n
+  error
+}
+
+compute_cv_error(traindata, Ytrain, k = 1)
+
+```
+
+
+## Find Best K
+
+```{r}
+
+cvKNN <- function(traindata, Ytrain, k_candidates, foldNum) {
+  n = nrow(traindata)
+  cvErrorRates = rep(NaN, length(k_candidates))
+  
+  for(i in 1:length(k_candidates)) {
+    cvErrorRates[i] = compute_cv_error(traindata, Ytrain, k_candidates[i])
+  }
+  
+  result = list()
+  result$bestK = max(k_candidates[cvErrorRates == min(cvErrorRates)])
+  result$cvError = min(cvErrorRates)
+  result
+}
+
+cvKNN(traindata, Ytrain, seq(1, 180), 10)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
