@@ -1,0 +1,353 @@
+---
+title: "(PSL) Coding Assignment 1"
+date: "Fall 2022"
+output:
+  html_notebook:
+    theme: readable
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r}
+library(ggplot2)
+library(class)
+```
+## Data Generation
+
+This assignment is related to the simulation study described in Section 2.3.1 (the so-called Scenario 2) of "Elements of Statistical Learning" (ESL).
+
+**Scenario 2**: the two-dimensional data $X \in R^2$ in each class is generated from a mixture of 10 different bivariate Gaussian distributions with uncorrelated components and different means, i.e.,
+$$ X \ | \ Y = k, Z = j \quad \sim \mathcal{N}(\mathbf{m}_{kj}, s^2 I_2) 
+$$
+
+where $k = 0$ or $1$, and $j=1, 2, \dots, 10$. Set
+$$P(Y=k) = 1/2, \quad P(Z=j) = 1/10, \quad s^2 = 1/5.
+$$
+In other words, given $Y=k$, $X$ follows a mixture distribution with density function
+
+$$\frac{1}{10}  \sum_{j=1}^{10} \left ( \frac{1}{\sqrt{2 \pi s^2}} \right )^2  e^{ -\|\mathbf{x} - \mathbf{m}_{kj} \|^2/(2 s^2)}.
+$$
+
+
+### Generate Centers
+
+Generate the 20 centers as follows: the 10 centers associated with class 1 are from one normal distribution and the 10 centers associated with class 0 from another normal distribution, 
+$$\mathbf{m}_{1j} \sim \mathcal{N} \Big ( \left ( \begin{array}{c} 1 \\ 0 \end{array} \right ), \mathbf{I}_2 \Big ), \quad \mathbf{m}_{0j} \sim \mathcal{N} \Big ( \left ( \begin{array}{c} 0 \\ 1 \end{array} \right ), \mathbf{I}_2 \Big ), \quad j=1:10. 
+$$
+
+```{r}
+p = 2;      
+csize = 10;     # number of centers
+sigma = 1;      # sd for generating the centers 
+m1 = matrix(rnorm(csize*p), csize, p)*sigma + 
+  cbind( rep(1, csize), rep(0, csize))
+m0 = matrix(rnorm(csize*p), csize, p)*sigma + 
+  cbind( rep(0, csize), rep(1, csize))
+```
+
+
+### Generate Data
+
+You can use `generate_sim_data` below to return a training sample of size 200 and a test sample of size 10,000, given generated centers $\mathbf{m}_{kj}$.
+
+```{r}
+sim_params = list(
+ csize = 10,      # number of centers
+ p = 2,           # dimension
+ s = sqrt(1/5),   # standard deviation for generating data
+ n = 100,         # training size per class
+ N = 5000,        # test size per class
+ m0 = m0,         # 10 centers for class 0
+ m1 = m1         # 10 centers for class 1
+)
+
+generate_sim_data = function(sim_params){
+  p = sim_params$p
+  s = sim_params$s 
+  n = sim_params$n 
+  N = sim_params$N 
+  m1 = sim_params$m1 
+  m0 = sim_params$m0
+  csize = sim_params$csize
+  
+  id1 = sample(1:csize, n, replace = TRUE);
+  id0 = sample(1:csize, n, replace = TRUE);
+  Xtrain = matrix(rnorm(2*n*p), 2*n, p)*s + rbind(m1[id1,], m0[id0,])
+  Ytrain = factor(c(rep(1,n), rep(0,n)))
+  id1 = sample(1:csize, N, replace=TRUE);
+  id0 = sample(1:csize, N, replace=TRUE); 
+  Xtest = matrix(rnorm(2*N*p), 2*N, p)*s + rbind(m1[id1,], m0[id0,])
+  Ytest = factor(c(rep(1,N), rep(0,N)))
+  
+  
+  # Return the training/test data along with labels
+  list(
+  Xtrain = Xtrain,
+  Ytrain = Ytrain,
+  Xtest = Xtest,
+  Ytest = Ytest
+  )
+}
+```
+ 
+
+```{r}
+mydata = generate_sim_data(sim_params)
+```
+
+### Visualization
+
+(This is not required.) You can use the following code to plot the training or test data. 
+
+```{r}
+tmp.X = mydata$Xtrain
+tmp.Y = mydata$Ytrain
+m0 = sim_params$m0        # 10 centers for class 0
+m1 = sim_params$m1  
+
+n = nrow(tmp.X)
+mycol = rep("blue", n)
+mycol[tmp.Y == 0] = "red"
+plot(tmp.X[, 1], tmp.X[, 2], type = "n", xlab = "", ylab = "")
+points(tmp.X[, 1], tmp.X[, 2], col = mycol);
+points(m1[, 1], m1[, 2], pch = "+", cex = 2, col = "blue");    
+points(m0[, 1], m0[, 2], pch = "+", cex = 2, col = "red");   
+legend("bottomright", pch = c(1,1), col = c("red", "blue"), 
+       legend = c("class 0", "class 1"))  
+```
+
+--- 
+
+## Part I: KNN
+
+In the first part of this assignment, you are asked to
+
+> 1) Write your own KNN function without using any packages (use Euclidean Distance);
+2) Explain how you handle distance ties and voting ties; 
+3) Test your code with `mydata` when K = 1, 3, 5; compare your results with the ones from the R command `knn`. 
+
+
+
+**distance ties** may occur when you have multiple (training) observations that are equidistant from a test observation. 
+
+**voting ties** may occur when K is an even number and you have 50\% of the k-nearest-neighbors from each of the two classes. 
+
+
+Display your results on `testdata` as 2-by-2 tables for K = 1, 3, 5. Compare your results with the ones from  `knn`.
+```{r}
+library(class)
+test.pred = knn(traindata, testdata, Ytrain, k = 1)
+table(Ytest, test.pred)
+test.pred = knn(traindata, testdata, Ytrain, k = 3)
+table(Ytest, test.pred)
+test.pred = knn(traindata, testdata, Ytrain, k = 5)
+table(Ytest, test.pred)
+```
+
+---
+
+## Part II: cv-KNN
+In the second part of this assignment, you are asked to 
+
+> 1. Implement KNN classification with K chosen by 10-fold cross-validation;
+2. Explain how you handle the non-uniquness of the optimal K values. 
+
+**Note:** 
+
+- Candidate K values are from 1 to 180. 
+- For this part, you are allowed to use the function `knn` from R package `class`, instead of your own KNN function from Part I.
+
+### Compute CV Errors
+
+How to compute the 10-fold CV error for a particular K value? 
+
+- First, divide the training data equally into ten folds, 
+- then compute the prediction error on each fold using the KNN classifier trained based on the other nine folds.
+
+Specially, in the code below, we set `K = 3` and loop over `runId` from 1 to 10 to compute the CV error. For example, when `runId = 3`, we find the indices of samples in the 3rd fold (stored in `testSetIndex`), then train a KNN model without data in `testSetIndex`, and finally form prediction on data in `testSetIndex`.
+
+```{r}
+traindata = mydata$Xtrain
+Ytrain = mydata$Ytrain
+foldNum = 10
+n = nrow(traindata)
+foldSize = floor(n/foldNum)  
+K = 3
+error = 0
+for(runId in 1:foldNum){
+  testSetIndex = ((runId-1)*foldSize + 1):(ifelse(runId == foldNum, n, runId*foldSize))
+  trainX = traindata[-testSetIndex, ]
+  trainY = Ytrain[-testSetIndex]
+  testX = traindata[testSetIndex, ]
+  testY = Ytrain[testSetIndex]
+  predictY = knn(trainX, testX, trainY, K)
+  error = error + sum(predictY != testY) 
+}
+error = error / n
+error
+```
+
+In the code above, the 200 training samples are sequentially divided into 10 folds. This could be **problematic** if the order of the training data is not random, e.g., all samples with Y=1 are arranged at the beginning. To avoid this problem, one can read `testSetIndex` from a shuffled index set (1 to n):
+
+```{r eval=FALSE}
+myIndex = sample(1 : n)
+for(runId in 1:foldNum){
+  testSetIndex = ((runId-1)*foldSize + 1):(ifelse(runId == foldNum, n, runId*foldSize))
+  testSetIndex = myIndex[testSetIndex]
+  ...
+```
+
+### Find Best K
+You can use the code above to compute the 10-fold CV error for each potential K value and then return the best K value that minimizes CV errors. 
+
+**Note**: it is possible that multiple K values give the (same) smallest CV error; when this happens, pick the largest K value among them, since the larger the K value, the simpler the model.
+
+Your CV-KNN function may look like the following
+
+```{r eval=FALSE}
+cvKNN = function(traindata, Ytrain, foldNum) {
+  n = nrow(traindata)
+  foldSize = floor(n/foldNum)  
+  KVector = seq(1, (nrow(traindata) - foldSize), 1)
+  
+  ########################################
+  # Your Code
+  # Compute CV errors and store them in cvErrorRates
+  #########################################
+  
+  result = list()
+  result$bestK = max(KVector[cvErrorRates == min(cvErrorRates)])
+  result$cvError = cvErrorRates[KVector == result$bestK]
+  result
+}
+```
+
+
+**Note**: CV errors are computed only on the training data; you do not compute CV errors on any test data set. 
+
+----
+
+## Part III: Bayes Rule
+
+In the third part of this assignment, you are asked to 
+
+> 1. Implement the Bayes Rule. 
+
+The Bayes rule for binary classification (under the zero-one loss), as derived in class, is: 
+predict $Y$ to be 1, if 
+$$P(Y = 1 \mid X = x) \ge P(Y = 0 \mid X=x), 
+$$
+or equivalently
+$$ \frac{P(Y = 1 \mid X = x)}{P(Y = 0 \mid X=x)} \ge 1.$$
+
+Following the data generation process, we have 
+$$ \displaystyle  \frac{P(Y=1\mid X=x)}{P(Y=0\mid X=x)}=\frac{P(Y=1) \cdot P(X=x\mid Y=1)}{P(Y=0) \cdot P(X=x\mid Y=0)} $$
+$$\displaystyle =\frac{(1/2)\cdot 10^{-1}\sum_{l=1}^{10}(2\pi s^2)^{-1}\exp\left(-\lVert\mathbf{x}-\mathbf{m}_{1l}\rVert^2/(2s^2)\right)}{(1/2)\cdot 10^{-1}\sum_{l=1}^{10}(2\pi s^2)^{-1}\exp\left(-\lVert\mathbf{x}-\mathbf{m}_{0l}\rVert^2/(2s^2)\right)} $$
+$$\displaystyle =\frac{\sum_{l=1}^{10}\exp\left(-\lVert\mathbf{x}-\mathbf{m}_{1l}\rVert^2/(2s^2)\right)}{\sum_{l=1}^{10}\exp\left(-\lVert\mathbf{x}-\mathbf{m}_{0l}\rVert^2/(2s^2)\right)}. $$
+You can use the following code to compute the numerator and the denominator of this ratio. 
+
+```{r}
+m1 = sim_params$m1
+m0 = sim_params$m0
+s = sim_params$s
+d1 = sum(exp(-apply((t(m1) - x)^2, 2, sum) / (2 * s^2)))
+d0 = sum(exp(-apply((t(m0) - x)^2, 2, sum) / (2 * s^2)))
+```
+
+### Decision Boundary (Optional)
+
+Suppose your function for Bayes Rule is called `BayesPredict`, which looks as the following
+```{r}
+BayesPredict = function(x, sim_params){
+  ################################
+  # Your Code
+  # Return the binary prediction for x
+  ################################
+}
+```
+To check whether your function is correct, you can use the following code to draw the corresponding Bayes decision boundary (similar to Figure 2.5 in ESL). Red regions should be close to red centers and blue regions to blue centers. 
+
+```{r}
+Xmin = min(mydata$Xtrain[, 1])
+Xmax = max(mydata$Xtrain[, 1])
+X1Vector = seq(Xmin, Xmax, (Xmax - Xmin)/99)
+Xmin = min(mydata$Xtrain[, 2])
+Xmax = max(mydata$Xtrain[, 2])
+X2Vector = seq(Xmin, Xmax, (Xmax - Xmin)/99)
+grid = expand.grid(X1Vector, X2Vector)
+colnames(grid) = c('X1', 'X2')
+```
+
+```{r}
+BayesRuleGrid = grid
+BayesRuleGrid$Y = as.factor(apply(BayesRuleGrid, 1, BayesPredict, sim_params))
+
+tmp.data = data.frame(X1 = c(sim_params$m0[,1], sim_params$m1[,1]),
+                      X2 = c(sim_params$m0[,2], sim_params$m1[,2]),
+                      Y = c(rep(0, 10), rep(1, 10)))
+ggplot(data = tmp.data, aes(x = X1, y = X2, color = as.factor(Y))) + 
+  geom_point(shape = 3, size = 3) +
+  geom_point(data = BayesRuleGrid, 
+             aes(x = X1, y = X2, color = Y), size = 0.1, alpha = 0.1) + 
+  scale_color_manual(name = "Y",
+                     values = c("0" = "red",
+                                "1" = "blue"), 
+                     labels = c("class 0", "class 1"))
+```
+
+You can easily modify the code above to draw the decision boundary for KNN. 
+```{r}
+KNNGrid = grid
+KNNGrid$Y = as.factor(apply(grid, 1, knn, 
+                              train = mydata$Xtrain, 
+                              cl = mydata$Ytrain, 
+                              k = 12))
+ggplot(data = tmp.data, aes(x = X1, y = X2, color = as.factor(Y))) + 
+  geom_point(shape = 3, size = 3) +
+  geom_point(data = cvKNNGrid, 
+             aes(x = X1, y = X2, color = Y), size = 0.1, alpha = 0.15) + 
+  scale_color_manual(name = "Y",
+                     values = c("0" = "red",
+                                "1" = "blue"), 
+                     labels = c("class 0", "class 1"))
+```
+
+---
+
+## Part IV: Simulation Study
+
+In the last part of this assignment, you are asked to use the **same** set of centers `m1` and `m0`, and repeatedly call `generate_sim_data` to generate **50** data sets. For each data set, calculate the test errors (the averaged 0/1 loss on the test data set) for each the following three procedures:
+
+1) KNN classification with K = 1,
+2) KNN classification with K chosen by 10-fold cross-validation, and 
+3) the Bayes Rule.
+   
+> Present the test errors graphically, e.g., using boxplot or stripchart. Also report the mean and standard error for the chosen K values.
+
+
+**Note**: 
+
+* For KNN, you can use the function `knn` from R package `class`, instead of your own KNN function from Part II.
+
+* "report the mean and standard error for the chosen K values" -- For each of the 50 data sets, you'll have a K value chosen via 10-fold CV. Report the mean and standard error of those 50 values. 
+
+
+---
+
+## What to Submit
+A Markdown (or Notebook) file in HTML format.
+
+* You are not allowed to use any functions/packages except `knn` and `ggplot2`. For example, you cannot use functions/packages for evaluating normal density functions or for cross validation; you have to write your own.
+
+* Set the seed at the beginning of your code to be the last 4-dig of your UIN. So we can get the same result if we re-run your code, 
+
+* Name your file starting with 
+  
+  <span style="color: red;">Assignment_1_xxxx netID</span>
+  
+  where “xxxx” is the last 4-dig of your UIN and make sure the same 4-dig is used as the seed in your code.
+
+  For example, the submission for Max Chen with UIN 672757127 and netID mychen12 should be named as
+  
+  <span style="color: red;">Assignment_1_7127_mychen12.html</span>
+  

@@ -235,6 +235,18 @@ for(i in 1:10) {
   print(cvKNN(traindata, Ytrain, seq(1, 180), 10))
 }
 
+BayesPredict = function(x, sim_params){
+  
+  m1 = sim_params$m1
+  m0 = sim_params$m0
+  s = sim_params$s
+  d1 = sum(exp(-apply((t(m1) - x)^2, 2, sum) / (2 * s^2)))
+  d0 = sum(exp(-apply((t(m0) - x)^2, 2, sum) / (2 * s^2))) 
+  
+  br = d1 / d0
+  ifelse(br >= 1, 1, 0)
+}
+
 testdata = mydata$Xtest
 Ytest = mydata$Ytest
 N = sim_params$N
@@ -257,3 +269,45 @@ print(br_preds)
 sum(br_preds == 0)
 sum(br_preds == 1)
 table(Ytest, br_preds)
+
+traindata = mydata$Xtrain
+testdata = mydata$Xtest
+Ytrain = mydata$Ytrain
+Ytest = mydata$Ytest
+N = sim_params$N
+
+num_datasets = 50
+test.errors.k1 = rep(NaN, num_datasets)
+test.cv = list(
+  errors = rep(NaN, num_datasets),
+  ks = rep(NaN, num_datasets)
+)
+test.errors.bayes = rep(NaN, num_datasets)
+
+for(i in 1:num_datasets) {
+  dataset = generate_sim_data(sim_params)
+  
+  preds_k1 = knn(dataset$Xtrain, dataset$Xtest, dataset$Ytrain, k = 1)
+  test.errors.k1[i] = sum(dataset$Ytest != preds_k1)/(2*N)
+  
+  ks_cv = cvKNN(dataset$Xtrain, dataset$Ytrain, seq(1, 180), 10)
+  preds_selected_k = knn(dataset$Xtrain, dataset$Xtest, dataset$Ytrain, k = ks_cv$bestK)
+  test.cv$errors[i] = sum(dataset$Ytest != preds_selected_k)/(2*N)
+  test.cv$ks[i] = ks_cv$bestK
+  
+  preds_bayes = as.factor(apply(dataset$Xtest, 1, BayesPredict, sim_params))
+  test.errors.bayes[i] = sum(dataset$Ytest != preds_bayes)/(2*N)
+}
+
+
+b <- boxplot(test.errors.k1, test.cv$errors, test.errors.bayes,
+             names = c("kNN with k=11", "k chosen with 10-fold CV", "Bayes rule"),
+             xlab = "Predictors used.",
+             ylab = "Averaged 0/1 loss",
+             main = "Comparing prediction errors on 50 simulated datasets.",
+             pch = 20,
+             cex = 2,
+             border = "brown",
+             col = "lightblue"
+)
+

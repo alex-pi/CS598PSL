@@ -1,19 +1,21 @@
 ---
 title: "Coding 1 - PSL 598, Fall 2022"
-author: "Alejandro Pimentel (ap41)"
+author: "Alejandro Pimentel (netID ap41,UIN 659282110)"
 date: ''
 output:
   html_document: 
     theme: readable
     toc: yes
+    toc_float: TRUE
     code_folding: show
+    code_download: true
   pdf_document: default
 urlcolor: cyan
 editor_options: 
   chunk_output_type: console
 ---
 
-```{css}
+```{css, class.source = 'fold-hide'}
 p, li, td {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
@@ -27,6 +29,9 @@ set.seed(uin_4)
 
 
 # Generate Centers
+
+Generate the 20 centers as follows: the 10 centers associated with class 1 are from one normal distribution and the 10 centers associated with class 0 from another normal distribution, 
+$$\mathbf{m}_{1j} \sim \mathcal{N} \Big ( \left ( \begin{array}{c} 1 \\ 0 \end{array} \right ), \mathbf{I}_2 \Big ), \quad \mathbf{m}_{0j} \sim \mathcal{N} \Big ( \left ( \begin{array}{c} 0 \\ 1 \end{array} \right ), \mathbf{I}_2 \Big ), \quad j=1:10. $$
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -43,6 +48,8 @@ m0 = matrix(rnorm(csize*p), csize, p)*sigma +
 ```
 
 # Generate Data
+
+You can use `generate_sim_data` below to return a training sample of size 200 and a test sample of size 10,000, given generated centers $\mathbf{m}_{kj}$.
 
 ```{r message=FALSE, warning=FALSE}
 sim_params = list(
@@ -112,13 +119,13 @@ legend("bottomright", pch = c(1,1), col = c("red", "blue"),
 
 # Part I: KNN
 
-The following functions performs predictions on a test data set using k Nearest Neighbors 
+The following function performs predictions on a test data set using k Nearest Neighbors 
 algorithm. Roughly speaking, the algorithm follows these steps for each test point:
 
 - Calculates the euclidean distance from a test point to all training points.
 - Takes the k closest training points. The order function will preserve the order of appearance in case of distance tie.
 - It takes the most repeated class among the k closest points as the prediction for the test point. If there is voting tie,
-  i.e. both classes appeared the same number of times, the algorithm takes class 0. This is side effect of using, `table` and
+  i.e. both classes appeared the same number of times, the algorithm takes class 0. This is a side effect of using, `table` and
   `which.max` functions.
 
 ```{r}
@@ -135,9 +142,12 @@ my_knn = function(traindata, testdata, Ytrain, k) {
     Ypred[i] = voted_max - 1
   }
   
+  # convert perdictions to factors
   factor(Ypred)
 }
 
+
+# declare some shorcut variables for next sections
 traindata = mydata$Xtrain
 testdata = mydata$Xtest
 Ytrain = mydata$Ytrain
@@ -147,7 +157,7 @@ N = sim_params$N
 
 ## Handling distance and voting ties.
 
-When `k` is an odd number my algorithm does not have voting ties.
+When `k` is an odd number the algorithm does not have voting ties.
 When `k` is even, I simply select the first class from the max operation: `which.max(table(k_nearest_classes$Ytrain))`
 
 Similarly, for distance ties, I take the `k` smallest distances according to R's `order` function.
@@ -187,6 +197,10 @@ test.err.k3 = sum(Ytest != test.pred.k3)/(2*N)
 test.err.k5 = sum(Ytest != test.pred.k5)/(2*N)
 ```
 
+- Average loss when $k=1$, `r test.err.k1`
+- Average loss when $k=3$, `r test.err.k3`
+- Average loss when $k=5$, `r test.err.k5`
+
 ## Using knn from class lib
 
 ```{r}
@@ -200,7 +214,19 @@ test.err.ck3 = sum(Ytest != test.pred.ck3)/(2*N)
 test.err.ck5 = sum(Ytest != test.pred.ck5)/(2*N)
 ```
 
+- Average loss when $k=1$, `r test.err.ck1`
+- Average loss when $k=3$, `r test.err.ck3`
+- Average loss when $k=5$, `r test.err.ck5`
+
 ## Comparing kNN predictions with contingency tables
+
+First we compare our algorithm predictions with the ground truth `Ytest`.
+
+```{r}
+table(Ytest, test.pred.k1)
+table(Ytest, test.pred.k3)
+table(Ytest, test.pred.k5)
+```
 
 Below we are comparing predictions between the 2 algorithms.
 
@@ -384,6 +410,9 @@ for(i in 1:num_datasets) {
 }
 ```
 
+
+## Comparing test errors.
+
 The following `boxplot` shows how the errors for each method are distributed.
 
 - `Bayes rules` here represents our ideal (unattainable) predictor based on the known centers $m0$ and $m1$.
@@ -392,7 +421,7 @@ The following `boxplot` shows how the errors for each method are distributed.
 ```{r}
 boxplot(test.errors.k1, test.cv$errors, test.errors.bayes,
              names = c("kNN with k=1", "k chosen with 10-fold CV", "Bayes rule"),
-             xlab = "Predictors used.",
+             xlab = "Prediction algorithms used.",
              ylab = "Averaged 0/1 loss",
              main = "Comparing prediction errors on 50 simulated datasets.",
              pch = 20,
@@ -401,12 +430,14 @@ boxplot(test.errors.k1, test.cv$errors, test.errors.bayes,
              col = "lightblue")
 ```
 
+## k values chosen by 10-fold CV
 
-The following bar chart displays best `k` selected by `10-fold cross-validation kNN` classifier.
+The following bar chart displays best 50 `k` values selected by `10-fold cross-validation kNN` classifier.
 
 ```{r}
 ggplot(as.data.frame(test.cv), aes(x=1:num_datasets, y=ks)) + 
     geom_bar(stat="identity",fill="steelblue4") + theme_minimal() +
+    geom_text(aes(label=ks), position=position_dodge(width=0.9), vjust=-0.25) +
     xlab("Simulation ID") + ylab("Selected Best k")
 ```
 
