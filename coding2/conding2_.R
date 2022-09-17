@@ -94,10 +94,14 @@ MyLasso = function(X, y, lam.seq, maxit = 100) {
   # update the intercepts stored in B[1, ]
   ##############################
   
+  B[-1, ] = B[-1, ]  / X_sds
+  inter_=colSums(B[-1,] * -X_means)
+  B[1,] = mean(y) + inter_
+  
   return(B)
 }
 
-none = MyLasso(X, y, lam.seq[1:10], maxit = 100)
+B = MyLasso(X, y, lam.seq, maxit = 100)
 
 j=9
 m=1
@@ -127,13 +131,15 @@ if((a < 0 && x > 0) || (a > 0 && x < 0)) {
   x = x * -1
 } 
 
+#b[j] = one_var_lasso(r, new.X[, j], lam.seq[m])
 
+myData = read.csv("Coding2_Data.csv")
+X = as.matrix(myData[, -14])
+y = myData$Y
+lam.seq = exp(seq(-1, -8, length.out = 80))
+myout = MyLasso(X, y, lam.seq)
 
-
-
-
-
-b[j] = one_var_lasso(r, new.X[, j], lam.seq[m])
-
-
+library(glmnet)
+lasso.fit = glmnet(X, y, alpha = 1, lambda = lam.seq)
+max(abs(coef(lasso.fit) - myout))
 

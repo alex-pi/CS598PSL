@@ -6,6 +6,12 @@ output:
     theme: readable
     toc: TRUE
     toc_float: TRUE
+    code_folding: show
+    code_download: true
+  pdf_document: default
+urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
 ---
 
 ## Part I: Implement Lasso
@@ -27,6 +33,28 @@ one_var_lasso = function(r, z, lam) {
   ##############################
   # YOUR CODE
   ##############################
+  z_len = t(z) %*% z
+  a_num = t(r) %*% z
+  
+  a = a_num / z_len
+  lam_ = (2*n*lam) / z_len
+  
+  ## derivation cases
+  x = a + lam_ / 2
+  if(a > lam_ / 2) {
+    x = a - lam_ / 2
+  } 
+  
+  if(abs(a) <= lam_ / 2) {
+    x = 0
+  }
+  
+  ## select same sign as a
+  if((a < 0 && x > 0) || (a > 0 && x < 0)) {
+    x = x * -1
+  } 
+  
+  return(x)
 }
 ```
 
@@ -70,6 +98,15 @@ MyLasso = function(X, y, lam.seq, maxit = 100) {
     # (1) new.X = centered & scaled X; 
     # (2) record the centers and scales used in (1) 
     ##############################
+    
+    ones = rep(1, n)
+    X_means = colMeans(X)
+    Xn_means = ones %*% t(X_means)
+    X_centered = X - Xn_means
+    
+    X_sds = apply(X, 2, sd)
+    Xn_sds = ones %*% t(X_sds)
+    new.X = X_centered / Xn_sds    
 
     # Initialize coef vector b and residual vector r
     b = rep(0, p)
@@ -92,6 +129,10 @@ MyLasso = function(X, y, lam.seq, maxit = 100) {
     # scale back the coefficients;
     # update the intercepts stored in B[1, ]
     ##############################
+    
+    B[-1, ] = B[-1, ]  / X_sds
+    inter_=colSums(B[-1,] * -X_means)
+    B[1,] = mean(y) + inter_
     
     return(B)
 }
@@ -148,64 +189,147 @@ plot(lasso.fit, xvar = "lambda")
 
 ## Part II: Simulation Study
 
+```{r}
+library(glmnet) 
+library(pls)
+```
+
+```{r}
+# Set a seed to have a stable generation of random numbers
+uin_4 = 2110
+set.seed(uin_4)
+```
+
 Consider the following **seven** procedures:
 
 * __Full__: run a linear regression model using all features
+
+```{r}
+full_model = function(data, test.ids) {
+
+  mse = rep(NaN, dim(test.ids)[2])
+  for(i in 1:dim(test.ids)[2]) {
+    test.id = test.ids[, i] 
+    full.model = lm(Y ~ ., data = data[-test.id, ])
+    Ytest.pred = predict(full.model, newdata = myData[test.id, ])
+    mse[i] = mean((myData$Y[test.id] - Ytest.pred)^2)
+  }
+  
+  return(mse)
+}
+```
+
+
 * __Ridge.min__ and __Ridge.1se__: Ridge regression using `lambda.min` or `lambda.1se` 
+
+```{r}
+ridge_reg = function(X_data, Y_data, test.ids) {
+  
+  mylasso.lambda.seq = exp(seq(-10, 1, length.out = 100))
+  
+  mse = list(
+    lam_min = rep(NaN, dim(test.ids)[2]),
+    lam_1se = rep(NaN, dim(test.ids)[2])
+  )
+  
+  for(i in 1:dim(test.ids)[2]) {  
+    test.id = test.ids[, i]
+    cv.out = cv.glmnet(X_data[-test.id, ], Y_data[-test.id], alpha = 0, 
+                       lambda = mylasso.lambda.seq)
+    
+    best.lam = cv.out$lambda.min
+    Ytest.pred = predict(cv.out, s = best.lam, newx = X_data[test.id, ])
+    mse$lam_min[i] = mean((Y_data[test.id] - Ytest.pred)^2)
+    
+    best.lam = cv.out$lambda.1se
+    Ytest.pred = predict(cv.out, s = best.lam, newx = X_data[test.id, ])
+    mse$lam_1se[i] = mean((Y_data[test.id] - Ytest.pred)^2)
+  }
+  
+  return(mse)
+}
+```
+
+
 * __Lasso.min__ and __Lasso.1se__: Lasso using `lambda.min` or `lambda.1se`
 * __L.Refit__: Refit the model selected by Lasso using `lambda.1se`
+
+```{r}
+lasso_reg = function(data, test.ids) {
+  
+  X_data = data.matrix(data[,-1])  
+  Y_data = data[,1] 
+  
+  mse = list(
+    lam_min = rep(NaN, dim(test.ids)[2]),
+    lam_1se = rep(NaN, dim(test.ids)[2]),
+    refit = rep(NaN, dim(test.ids)[2])
+  )
+  
+  for(i in 1:dim(test.ids)[2]) {  
+    test.id = test.ids[, i]
+    cv.out = cv.glmnet(X_data[-test.id, ], Y_data[-test.id], alpha = 1)
+    best.lam = cv.out$lambda.min
+    Ytest.pred = predict(cv.out, s = best.lam, newx = X_data[test.id, ])
+    mse$lam_min[i] = mean((Y_data[test.id] - Ytest.pred)^2)
+    
+    best.lam = cv.out$lambda.1se
+    Ytest.pred = predict(cv.out, s = best.lam, newx = X_data[test.id, ])
+    mse$lam_1se[i] = mean((Y_data[test.id] - Ytest.pred)^2)
+    
+    # Lasso refit
+    mylasso.coef = predict(cv.out, s = best.lam, type = "coefficients")
+    var.sel = row.names(mylasso.coef)[which(mylasso.coef != 0)[-1]]
+
+    mylasso.refit = lm(Y ~ ., data[-test.id, c("Y", var.sel)])
+    Ytest.pred = predict(mylasso.refit, newdata = data[test.id, ])
+    mse$refit[i] = mean((Ytest.pred - Y_data[test.id])^2)
+  }
+  
+  return(mse)
+}
+
+lasso_reg(myData, all.test.id)
+```
+
+
 * __PCR__: principle components regression with the number of components chosen by 10-fold cross validation
+
+```{r}
+pcr_reg = function(data, test.ids) {
+  
+  mse = rep(NaN, dim(test.ids)[2])
+  
+  for(i in 1:dim(test.ids)[2]) {
+    test.id = test.ids[, i]
+    mypcr = pcr(Y ~ ., data= data[-test.id, ], validation="CV")
+    CVerr = RMSEP(mypcr)$val[1, , ]
+    adjCVerr = RMSEP(mypcr)$val[2, , ]
+    best.ncomp = which.min(CVerr) - 1 
+    
+    if (best.ncomp==0) {
+      Ytest.pred = mean(data$Y[-test.id])
+    } else {
+      Ytest.pred = predict(mypcr, data[test.id,], ncomp=best.ncomp)
+    }
+    mse[i] = mean((Ytest.pred - data$Y[test.id])^2)
+  }
+  
+  return(mse)
+}
+```
+
 
 ### Case I
 
 Download `Coding2_Data2.csv` [[Link](https://liangfgithub.github.io/F22/Coding2_Data2.csv)]. The first 14 columns are the same as the data set we used in Part I with `Y` being the response variable (moved to the 1st column). The additional 78 more predictors are the quadratic and interaction terms of the original 13 predictors.
 
-* [a] Repeat the following simulation 50 times: In each iteration, randomly split the data into two parts, 75% for training and 25% for testing. For each of the **seven** procedures, fit a model based on the training data and obtain a prediction on the test data, record the mean squared prediction error (MSPE) on the test data.
-
-* [b] Summarize your results on MSPE graphically, e.g., using boxplot or stripchart. 
-
-* [c] Based on your simulation results, answer the following questions: 
-  * Which method or methods perform the best? 
-  * Which method or methods perform the worst? 
-  * For Ridge regression, which, `lambda.min` or `lambda.1se`, produces better MSPE? 
-  * For Lasso regression, which, `lambda.min` or `lambda.1se`, produces better MSPE? 
-  * Is it worth doing refit? That is, does __L.Refit__ perform better than __Lasso.1se__? 
-  * Is it worth doing variable selection or shrinkage in this case? That is, do you think the performance of __Full__ is comparable or not to the best among the other six?  
-
-
-### Case II
-
-Download `Coding2_Data3.csv` [[Link](https://liangfgithub.github.io/F22/Coding2_Data3.csv)]. The first 92 columns are the same as `Coding2_Data2.csv`, and the remaining 500 columns are artificially generated noise features.
-
-* Repeat [a] and [b] above for the seven procedures **except Full**, and summarize your results on MSPE graphically. 
-
-* [c] Answer the following questions: 
-  * Which method or methods perform the best in this case? 
-  * Which method or methods perform the worst in this case?
-  * Do you notice any method/methods that performs/perform better in one case but not in the other? If so, explain why. 
-  * Since `Coding2_Data3.csv` contains all features in `Coding2_Data2.csv`, one may expect that the best MSPE in Case II is smaller than, or at least not bigger than, the the best MSPE in Case I. Do your simulation results support this expectation? If not, explain why. 
-  
-### Sample Code
-
-Load libraries and data. 
-
 ```{r}
-library(glmnet) 
-library(pls)
 myData = read.csv("Coding2_Data2.csv", header = TRUE)
-```  
 
-Some algorithms need the matrix/vector input (instead of a data frame)
-```{r}
 X = data.matrix(myData[,-1])  
 Y = myData[,1] 
-```
 
-We will repeat the simulation 50 times. In each iteration, randomly split the data into two parts, 75% for training and 25% for testing. You can write a loop with 50 iterations, and in each iteration, split the data and run the seven procedures (six procedures for case II).
-
-Or you can save the row IDs for the 50 test data sets, then write a separate loop for each method. Using `all.test.id` (produced below), you can ensure that you use the same training/test split for each procedure.
-
-```{r}
 T = 50
 n = length(Y)
 ntest = round(n * 0.25)  # test set size
@@ -214,88 +338,132 @@ all.test.id = matrix(0, ntest, T)  #
 for(t in 1:T){
   all.test.id[, t] = sample(1:n, ntest)
 }
-#save(all.test.id, file="alltestID.RData")
 ```
 
-Next, let's try the seven procedures using the first split. 
 
-* __Full Model__
-```{r}
-test.id = all.test.id[, 1] 
-full.model = lm(Y ~ ., data = myData[-test.id, ])
-Ytest.pred = predict(full.model, newdata = myData[test.id, ])
-mean((myData$Y[test.id] - Ytest.pred)^2)
-```
-
-* __Ridge Regression__
-
-The default lambda sequence for this data set is too large. Suggest to use a sequence that covers smaller lambda values as `mylasso.lambda.seq` below.
+* [a] Repeat the following simulation 50 times: In each iteration, randomly split the data into two parts, 75% for training and 25% for testing. For each of the **seven** procedures, fit a model based on the training data and obtain a prediction on the test data, record the mean squared prediction error (MSPE) on the test data.
 
 ```{r}
-mylasso.lambda.seq = exp(seq(-10, 1, length.out = 100))
-cv.out = cv.glmnet(X[-test.id, ], Y[-test.id], alpha = 0, 
-                   lambda = mylasso.lambda.seq)
+full_c1 = full_model(myData, all.test.id)
+ridge_c1 = ridge_reg(X, Y, all.test.id)
+lasso_c1 = lasso_reg(myData, all.test.id)
+pcr_c1 = pcr_reg(myData, all.test.id)
 
-best.lam = cv.out$lambda.min
-Ytest.pred = predict(cv.out, s = best.lam, newx = X[test.id, ])
-mean((Y[test.id] - Ytest.pred)^2)
-
-best.lam = cv.out$lambda.1se
-Ytest.pred = predict(cv.out, s = best.lam, newx = X[test.id, ])
-mean((Y[test.id] - Ytest.pred)^2)
+df_results = data.frame(
+  "Full" = full_c1,
+  "Ridge.min" = ridge_c1$lam_min,
+  "Ridge.1se" = ridge_c1$lam_1se,
+  "Lasso.min" = lasso_c1$lam_min,
+  "Lasso.1se" = lasso_c1$lam_1se,
+  "L.refit" = lasso_c1$refit,
+  "PCR" = pcr_c1
+)
 ```
 
-* __Lasso__ 
-```{r}
-cv.out = cv.glmnet(X[-test.id, ], Y[-test.id], alpha = 1)
-best.lam = cv.out$lambda.min
-Ytest.pred = predict(cv.out, s = best.lam, newx = X[test.id, ])
-mean((Y[test.id] - Ytest.pred)^2)
 
-best.lam = cv.out$lambda.1se
-Ytest.pred = predict(cv.out, s = best.lam, newx = X[test.id, ])
-mean((Y[test.id] - Ytest.pred)^2)
-
-# Lasso refit
-mylasso.coef = predict(cv.out, s = best.lam, type = "coefficients")
-var.sel = row.names(mylasso.coef)[which(mylasso.coef != 0)[-1]]
-mylasso.refit = lm(Y ~ ., myData[-test.id, c("Y", var.sel)])
-Ytest.pred = predict(mylasso.refit, newdata = myData[test.id, ])
-mean((Ytest.pred - Y[test.id])^2)
-```
-
-* __PCR__
-
-The principle components regression command, `pcr`, returns both the CV errors and the adjusted CV errors. For the definition of adjusted CV used in `pcr`, check Sec 2.4 of [this paper](https://mevik.net/work/publications/MSEP_estimates.pdf); we use CV error below. 
+* [b] Summarize your results on MSPE graphically, e.g., using boxplot or stripchart. 
 
 ```{r}
-mypcr = pcr(Y ~ ., data= myData[-test.id, ], validation="CV")
-CVerr = RMSEP(mypcr)$val[1, , ]
-adjCVerr = RMSEP(mypcr)$val[2, , ]
-best.ncomp = which.min(CVerr) - 1 
+boxplot(df_results,  col = terrain.colors(dim(df_results)[2], alpha = 0.5))
 
-if (best.ncomp==0) {
-    Ytest.pred = mean(myData$Y[-test.id])
-  } else {
-    Ytest.pred = predict(mypcr, myData[test.id,], ncomp=best.ncomp)
-  }
-mean((Ytest.pred - myData$Y[test.id])^2)
+for(i in 1:dim(df_results)[2]) {
+  mses = df_results[, i]
+  myjitter = jitter(rep(i, length(mses)), amount = 0.2)
+  points(myjitter, mses, pch=20, col=rgb(0,0,0,.9))
+}
 ```
 
-Note that we have to subtract one from `which.min(CVerr)` since the 1st column of the CV table corresponds to the CV error with zero component (i.e., the model with just the intercept) and the k-th column of the CV table corresponds to (k-1) components.
 
-The prediction function does not seem to work when `best.ncomp = 0`. So we have to handle that case separately.
+```{r}
+summary(df_results)
+```
 
----
+```{r}
+apply(df_results, 2, sd)
+```
 
-## What to Submit
-* A Markdown (or Notebook) file in HTML format, which contains all necessary code and the corresponding output/results.
 
-* Set the seed at the beginning of Part II to be the last 4-dig of your UIN. So we can get the same simulation results if we re-run your code, 
-
-* Name your file starting with 
+* [c] Based on your simulation results, answer the following questions: 
+  * Which method or methods perform the best? 
+  `Ridge.min`, `Lasso.min` and `PCR` seem to have the lowest MSPE on average.
   
-  <span style="color: red;">Assignment_2_xxxx netID</span>
+  * Which method or methods perform the worst? 
+  `Full`, `Ridge.1se`, `Lasso.1se` and `L.refit` seem to perform worst. `L.refit` in particular has more variability (highest sd).
   
-  where “xxxx” is the last 4-dig of your UIN and make sure the same 4-dig is used as the seed in your code.
+  * For Ridge regression, which, `lambda.min` or `lambda.1se`, produces better MSPE? 
+  `Ridge` with `lambda.min` produces lower MSPE.
   
+  * For Lasso regression, which, `lambda.min` or `lambda.1se`, produces better MSPE? 
+  `Lasso` with `lambda.min` produces lower MSPE.
+  
+  
+  * Is it worth doing refit? That is, does __L.Refit__ perform better than __Lasso.1se__? 
+  `L.Refit` does not perform significantly better than `Lasso.1se`, the latter even shows more variability.
+  
+  * Is it worth doing variable selection or shrinkage in this case? That is, do you think the performance of __Full__ is comparable or not to the best among the other six?  
+  `Full` model fit seems to perform worst than some of the selection or shrinkage methods, so we can conclude it is worth it.
+
+
+### Case II
+
+Download `Coding2_Data3.csv` [[Link](https://liangfgithub.github.io/F22/Coding2_Data3.csv)]. The first 92 columns are the same as `Coding2_Data2.csv`, and the remaining 500 columns are artificially generated noise features.
+
+```{r}
+myData = read.csv("Coding2_Data3.csv", header = TRUE)
+
+X = data.matrix(myData[,-1])  
+Y = myData[,1] 
+
+T = 50
+n = length(Y)
+ntest = round(n * 0.25)  # test set size
+ntrain = n - ntest  # training set size
+all.test.id = matrix(0, ntest, T)  # 
+for(t in 1:T){
+  all.test.id[, t] = sample(1:n, ntest)
+}
+```
+
+* Repeat [a] and [b] above for the seven procedures **except Full**, and summarize your results on MSPE graphically. 
+
+```{r}
+ridge_c2 = ridge_reg(X, Y, all.test.id)
+lasso_c2 = lasso_reg(myData, all.test.id)
+pcr_c2 = pcr_reg(myData, all.test.id)
+
+df_results = data.frame(
+  "Ridge.min" = ridge_c2$lam_min,
+  "Ridge.1se" = ridge_c2$lam_1se,
+  "Lasso.min" = lasso_c2$lam_min,
+  "Lasso.1se" = lasso_c2$lam_1se,
+  "L.refit" = lasso_c2$refit,
+  "PCR" = pcr_c2
+)
+```
+
+```{r}
+boxplot(df_results,  col = terrain.colors(dim(df_results)[2], alpha = 0.5))
+
+for(i in 1:dim(df_results)[2]) {
+  mses = df_results[, i]
+  myjitter = jitter(rep(i, length(mses)), amount = 0.2)
+  points(myjitter, mses, pch=20, col=rgb(0,0,0,.9))
+}
+```
+
+
+```{r}
+summary(df_results)
+```
+
+```{r}
+apply(df_results, 2, sd)
+```
+
+* [c] Answer the following questions: 
+  * Which method or methods perform the best in this case? 
+  * Which method or methods perform the worst in this case?
+  * Do you notice any method/methods that performs/perform better in one case but not in the other? If so, explain why. 
+  * Since `Coding2_Data3.csv` contains all features in `Coding2_Data2.csv`, one may expect that the best MSPE in Case II is smaller than, or at least not bigger than, the the best MSPE in Case I. Do your simulation results support this expectation? If not, explain why. 
+  
+
