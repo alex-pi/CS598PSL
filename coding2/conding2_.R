@@ -8,6 +8,7 @@ one_var_lasso = function(r, z, lam) {
   ##############################
   # YOUR CODE
   ##############################
+  n = length(y)
   
   z_len = t(z) %*% z
   a_num = t(r) %*% z

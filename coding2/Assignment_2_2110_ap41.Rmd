@@ -35,10 +35,7 @@ $$
 ```{r}
 one_var_lasso = function(r, z, lam) {
  
-  ##############################
-  # YOUR CODE
-  ##############################
-  n = length(y)
+  n = length(r)
   
   z_len = t(z) %*% z
   a_num = t(r) %*% z
@@ -294,7 +291,7 @@ pcr_reg = function(data, test.ids) {
   
   for(i in 1:dim(test.ids)[2]) {
     test.id = test.ids[, i]
-    mypcr = pcr(Y ~ ., data= data[-test.id, ], validation="CV")
+    mypcr = pcr(Y ~ ., data= data[-test.id, ], validation="CV", scale=TRUE)
     CVerr = RMSEP(mypcr)$val[1, , ]
     adjCVerr = RMSEP(mypcr)$val[2, , ]
     best.ncomp = which.min(CVerr) - 1 
@@ -387,7 +384,7 @@ apply(df_results_c1, 2, sd)
     * `Ridge.min`, `Lasso.min` and `PCR` seem to have the lowest MSPE on average.
   
   * Which method or methods perform the worst? 
-    * `Full`, `Ridge.1se`, `Lasso.1se` and `L.refit` seem to perform worst. Although not significant, `L.refit` has also more variability (highest sd).
+    * `Full`, `Ridge.1se`, `Lasso.1se` and `L.refit` seem to perform worst.
   
   * For Ridge regression, which, `lambda.min` or `lambda.1se`, produces better MSPE? 
     * `Ridge` with `lambda.min` produces lower MSPE.
@@ -397,7 +394,7 @@ apply(df_results_c1, 2, sd)
   
   
   * Is it worth doing refit? That is, does __L.Refit__ perform better than __Lasso.1se__? 
-    * `L.Refit` does not perform significantly better than `Lasso.1se`, the latter even shows more variability.
+    * `L.Refit` does not perform significantly better than `Lasso.1se`.
   
   * Is it worth doing variable selection or shrinkage in this case? That is, do you think the performance of __Full__ is comparable or not to the best among the other six?  
     * `Full` model fit seems to perform worst than some of the selection or shrinkage methods, so we can conclude it is worth it.
@@ -409,7 +406,7 @@ For __Case II__ we use the data set `Coding2_Data3.csv`. The first 92 columns ar
 
 ```{r}
 myData = read.csv("Coding2_Data3.csv", header = TRUE)
-myData = myData[,1:390]
+
 X = data.matrix(myData[,-1])  
 Y = myData[,1] 
 
@@ -467,15 +464,16 @@ apply(df_results_c2, 2, sd)
     * `Lasso.min`, `Lasso.1se` and `L.refit` seem to perform better in this case.
   
   * Which method or methods perform the worst in this case?
-    * `PCR` has the higher MSPE, followed by `Ridge.min` and `Ridge.1se`.
+    * `PCR` has the highest MSPE, followed by `Ridge.min` and `Ridge.1se`.
     
   * Do you notice any method/methods that performs/perform better in one case but not in the other? If so, explain why.
-    * On __Case 1__ `Ridge.min`, `Ridge.1se` and `PCR` seemed to do better that on __Case 2__.
-    * Even more, all methods seemed to do better on __Case 1__.
+    * On __Case I__ `Ridge.min`, `Ridge.1se` and `PCR` seemed to do better than on __Case II__.
+    * Even more, all methods perform better on __Case I__.
+    * Noise introduced on __Case II__ seems to be playing as a factor to the overall drop in performance. We try to explain this in the next point.
   
   * Since `Coding2_Data3.csv` contains all features in `Coding2_Data2.csv`, one may expect that the best MSPE in Case II is smaller than, or at least not bigger than, the best MSPE in Case I. Do your simulation results support this expectation? If not, explain why. 
-    * The simulation study indicates that even though `Coding2_Data3.csv` contains all features in `Coding2_Data2.csv`, all `MSPE` are better in average on `Coding2_Data2.csv`. So the aforementioned expectation is not supported.
-    * On `Coding2_Data3.csv` we introduced 500 predictors that are random noise, methods like Ridge (which do shrinkage only) will try to reduce the influence of the noisy predictors by shrinking the corresponding coefficients $\hat\beta_j$ close to 0. But not all that influence is eliminated.
+    * The simulation study indicates that even though `Coding2_Data3.csv` contains all features in `Coding2_Data2.csv`, all `MSPE` are better in average on `Coding2_Data2.csv`, __Case I__. So the aforementioned expectation is not supported.
+    * On `Coding2_Data3.csv` we introduced 500 predictors that are random noise, methods like Ridge (which do shrinkage only) will try to reduce the influence of the noisy predictors by shrinking the corresponding coefficients $\hat\beta_j$ close to `0`. But not all that influence is eliminated.
     * Similarly PCR gets affected while finding the direction of the principal components in the presence of the noisy predictors.
     * Note that among the methods used for __Case II__, `Lasso` performs better since it also does selection, in other words, likely many of the coefficients for the noisy predictors are set to `0`.
   
