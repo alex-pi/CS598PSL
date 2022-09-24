@@ -306,7 +306,7 @@ test_split = function(jth_split) {
   
   ## Encode factors
   train.x = expand_factors(train.x)
-  train = cbind(train_exp, train.y)
+  train = cbind(train.x, train.y)
   test = expand_factors(test)
   
   
