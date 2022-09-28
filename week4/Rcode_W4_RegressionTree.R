@@ -49,6 +49,7 @@ prune(tr1, cp=0.3)
 prune(tr1, cp=0.2)
 # This one is with 2 splits
 prune(tr1, cp=0.156)
+printcp(prune(tr1, cp=0.156))
 
 par(mfrow=c(1,1))
 plotcp(tr1)

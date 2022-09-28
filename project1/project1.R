@@ -1,6 +1,8 @@
 library(glmnet) 
 library(dplyr)
 library(ggplot2)
+library(xgboost)
+library(gbm)
 
 data <- read.csv("Ames_data.csv", stringsAsFactors = FALSE)
 testIDs <- read.table("project1_testIDs.dat")
@@ -167,8 +169,6 @@ winsorization = function(df, quantile_cut = 0.95) {
     df[, var] <- tmp
   }
   
-  
-  
   return(df)
 }
 
@@ -212,13 +212,18 @@ expand_factors = function(df) {
   return(new_df)
 }
 
-conciliate_predictors = function(dftr, dfte) {
+order_predictors = function(df) {
   
-  dftrnames = colnames(dftr)[order(colnames(dftr))]
+  df = df[order(colnames(df))]
+  
+  return(df)
+}
+
+conciliate_predictors = function(dftrnames, dfte) {
+  
+  #dftrnames = colnames(dftr)[order(colnames(dftr))]
+  dftrnames = dftrnames[order(dftrnames)]
   dftenames = colnames(dfte)[order(colnames(dfte))]
-  
-  dim(dftr)
-  dim(dfte)
   
   (missing_lvls = setdiff(dftrnames, dftenames))
   (new_lvls = setdiff(dftenames, dftrnames))
@@ -231,21 +236,81 @@ conciliate_predictors = function(dftr, dfte) {
   dfte[missing_lvls] = 0
   dfte = dfte[, -which(colnames(dfte) %in% new_lvls)]  
   
-  dftr = dftr[order(colnames(dftr))]
+  #dftr = dftr[order(colnames(dftr))]
   dfte = dfte[order(colnames(dfte))]
   
   sprintf(fmt = "Are both sets equal: %s\n", 
-          all.equal(colnames(dftr), colnames(dfte))) %>% cat() 
+          all.equal(dftrnames, colnames(dfte))) %>% cat() 
   
   return(list(
     test_df = dfte,
-    train_df = dftr,
+    #train_df = dftr,
     cols_added = missing_lvls,
     cols_removed = new_lvls
   ))
 }
 
-test_split = function(jth_split) {
+lasso_eval = function(X, Y, X_test, Y_test) {
+  ## Lasso/Ridge testing
+  cv.out = cv.glmnet(X, Y, alpha = 1) 
+  sel.vars = predict(cv.out, type="nonzero", 
+                     s = cv.out$lambda.min)$s1
+  
+  cv.out = cv.glmnet(as.matrix(X[, sel.vars]), 
+                     Y, alpha = 0)
+  
+  Ytest.pred = predict(cv.out, s = cv.out$lambda.min, 
+                       newx = X_test[, sel.vars])
+  
+  lasso_ridge_rmse = sqrt(mean((log(Y_test) - Ytest.pred)^2))
+  
+  cv.out = cv.glmnet(X, Y, alpha = 0.2)
+  
+  Ytest.pred = predict(cv.out, s = cv.out$lambda.min, newx = X_test)
+  
+  elas_rmse = sqrt(mean((log(Y_test) - Ytest.pred)^2))
+  
+  return(list(
+    lasso_ridge_rmse = lasso_ridge_rmse,
+    elas_rmse = elas_rmse
+  ))
+}
+
+boosting_eval = function(X, Y, X_test, Y_test) {
+  
+  gbm.model <- gbm.fit(
+    x = X,
+    y = Y,
+    distribution = "gaussian",
+    n.trees = 7000,
+    interaction.depth = 3,
+    shrinkage = 0.1,
+    #cv.folds = 5,
+    #n.cores = NULL, # will use all cores by default
+    verbose = FALSE
+  )
+  
+  Ytest.pred = predict(gbm.model, n.trees = gbm.model$n.trees, 
+                       X_test)
+  gbm_rmse = sqrt(mean((log(Y_test) - Ytest.pred)^2))  
+  
+  
+  xgb.model <- xgboost(data = X, 
+                       label = Y, max_depth = 6,
+                       eta = 0.05, nrounds = 5000,
+                       subsample = 0.5,
+                       verbose = FALSE)
+  
+  Ytest.pred = predict(xgb.model, X_test)
+  xgb_rmse = sqrt(mean((log(Y_test) - Ytest.pred)^2))
+  
+  return(list(
+    xgb_rmse = xgb_rmse,
+    gbm_rmse = gbm_rmse
+  ))
+}
+
+test_split = function(jth_split, evaluation_fn) {
   ## Prepare jth split
   dataj = load_split(jth_split)
   
@@ -306,44 +371,24 @@ test_split = function(jth_split) {
   
   ## Encode factors
   train.x = expand_factors(train.x)
+  train.x = order_predictors(train.x)
+  #print(colnames(train.x))
   train = cbind(train.x, train.y)
   test = expand_factors(test)
   
   
   ## Conciliate before testing
-  test_c = conciliate_predictors(train.x, test)
+  test_c = conciliate_predictors(colnames(train.x), test)
   
   ## Matrix forms
   #X_test = data.matrix(test)
   X_test = data.matrix(test_c$test_df)
   Y_test = data.matrix(dataj$y[, 2])
   
-  X = data.matrix(test_c$train_df)  
+  X = data.matrix(train.x)  
   Y = train$Sale_Price
   
-  ## Lasso/Ridge testing
-  cv.out = cv.glmnet(X, Y, alpha = 1) 
-  sel.vars = predict(cv.out, type="nonzero", 
-                     s = cv.out$lambda.min)$s1
-  
-  cv.out = cv.glmnet(as.matrix(X[, sel.vars]), 
-                     Y, alpha = 0)
-  
-  Ytest.pred = predict(cv.out, s = cv.out$lambda.min, 
-                       newx = X_test[, sel.vars])
-  
-  lasso_ridge_rmse = sqrt(mean((log(Y_test) - Ytest.pred)^2))
-  
-  cv.out = cv.glmnet(X, Y, alpha = 0.2)
-  
-  Ytest.pred = predict(cv.out, s = cv.out$lambda.min, newx = X_test)
-  
-  elas_rmse = sqrt(mean((log(Y_test) - Ytest.pred)^2))
-  
-  return(list(
-    lasso_ridge_rmse = lasso_ridge_rmse,
-    elas_rmse = elas_rmse
-  ))
+  return(evaluation_fn(X, Y, X_test, Y_test))
 }
 
 uin_4 = 15052
@@ -354,28 +399,45 @@ set.seed(uin_4)
 benchmk = 0.125
 for (i in 1:5) {
   print(paste("###### Test on split ", i, "#####"))
-  rmse = test_split(i)
+  rmse = test_split(i, lasso_eval)
   print(rmse)
-  print(rmse$lasso_ridge_rmse < benchmk)
-  print(rmse$elas_rmse < benchmk)
+  print(rmse < benchmk)
 }
 
-
+uin_4 = 15052
+set.seed(uin_4)
 
 benchmk = 0.135
 for (i in 1:5) {
   print(paste("###### Test on split ", (i+5), "#####"))
-  rmse = test_split(i+5)
+  rmse = test_split(i+5, lasso_eval)
   print(rmse)
-  print(rmse$lasso_ridge_rmse < benchmk)
-  print(rmse$elas_rmse < benchmk)
+  print(rmse < benchmk)
 }
 
 
+uin_4 = 15052
+set.seed(uin_4)
 
-best.lam = cv.out$lambda.1se
-Ytest.pred = predict(cv.out, s = best.lam, newx = X_test)
-sqrt(mean((log(Y_test) - Ytest.pred)^2))
+benchmk = 0.125
+for (i in 1:5) {
+  print(paste("###### Test on split ", i, "#####"))
+  rmse = test_split(i, boosting_eval)
+  print(rmse)
+  print(rmse < benchmk)
+}
+
+uin_4 = 15052
+set.seed(uin_4)
+
+benchmk = 0.135
+for (i in 1:5) {
+  print(paste("###### Test on split ", (i+5), "#####"))
+  rmse = test_split(i+5, boosting_eval)
+  print(rmse)
+  print(rmse < benchmk)
+}
+
 
 
 
