@@ -1,6 +1,6 @@
 # Step 0: Load necessary libraries
-library(glmnet) 
-library(xgboost)
+library(glmnet, warn.conflicts = FALSE, quietly = TRUE) 
+library(xgboost, warn.conflicts = FALSE, quietly = TRUE)
 ###########################################
 # Step 0: Load necessary libraries
 #
@@ -100,7 +100,7 @@ conciliate_predictors = function(dftrnames, dfte) {
 # Step 1: Preprocess training data
 #         and fit two models
 #
-train <- read.csv("train.csv")
+train <- read.csv("train.csv", stringsAsFactors = FALSE)
 #
 # YOUR CODE
 # 
@@ -165,7 +165,7 @@ xgb.model <- xgboost(data = X,
 # Step 2: Preprocess test data
 #         and output predictions into two files
 #
-test <- read.csv("test.csv")
+test <- read.csv("test.csv", stringsAsFactors = FALSE)
 #
 # YOUR CODE
 # 

@@ -7,7 +7,6 @@ library(gbm)
 data <- read.csv("Ames_data.csv", stringsAsFactors = FALSE)
 testIDs <- read.table("project1_testIDs.dat")
 
-
 save_splits = function(data, testIDs) {
   
   for(j in 1:dim(testIDs)[2]) {

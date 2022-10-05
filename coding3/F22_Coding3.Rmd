@@ -1,0 +1,289 @@
+---
+title: "(PSL) Coding Assignment 3"
+date: "Fall 2022"
+output:
+  html_notebook:
+    theme: readable
+    toc: TRUE
+    toc_float: TRUE
+---
+
+## Part I: Optimal span for loess (2pt)
+
+Write your own functions to use LOO-CV and GCV to select the optimal span for `loess`. Check the definition of LOO-CV and GCV given on page 33 in [[lec_W5_NonlinearRegression.pdf](https://liangfgithub.github.io/Notes/lec_W5_NonlinearRegression.pdf)]
+
+1. Test your code on data set [[Coding3_Data.csv](https://liangfgithub.github.io/F22/Coding3_Data.csv)]
+2. Report your CV and GCV for 15 span values: 0.20, 0.25, . . . , 0.90.
+3. Report the optimal value(s) for span based on CV and GCV.
+4. Plot the fitted curve(s) using the optimal value(s) for span.
+
+### Prepare your function
+
+If you do not know where to start, you can follow the structure below to prepare your functions.
+
+```{r, eval=FALSE}
+lo.lev <- function(x1, sp){
+  # x1: n-by-1 feature vector
+  # sp: a numerical value for "span"
+  
+  n = length(x1);
+  lev = rep(0, n)
+  
+  ##############################################
+  # YOUR CODE: Compute the diagonal entries of the 
+  #            smoother matrix S and 
+  #            store it in a vector "lev"
+  # Tip: check how we compute the smoother matrix
+  #      for smoothing spline models
+  ##############################################
+  
+  return(lev)
+}
+
+onestep_CV <- function(x1, y1, sp){
+  
+  ##############################################
+  #  YOUR CODE: 
+  #  1) Fit a loess model y1 ~ x1 with span = sp, and extract 
+  #     the corresponding residual vector
+  #  2) Call lo.lev to obtain the diagonal entries of S
+  #  3) Compute LOO-CV and GCV
+  ##############################################
+  
+  return(list(cv = cv, gcv = gcv))
+}
+
+myCV <- function(x1, y1, span){
+  # x1: feature vector of length n
+  # y1: response vector of length n
+  # span: a sequence of values for "span"
+  
+  m = length(span)
+  cv = rep(0, m)
+  gcv = rep(0, m)
+  
+  for(i in 1:m){
+    tmp = onestep_CV(x1, y1, span[i])
+    cv[i] = tmp$cv
+    gcv[i] = tmp$gcv
+  }
+  return(list(cv = cv, gcv = gcv))
+}
+```
+
+When computing LOO-CV and GCV, we need to know the diagonals of the smoother matrix. Check how we compute the smoother matrix for smoothing spline models, and use the same idea to compute the smoother matrix for `loess`.
+
+Note that we do not need the whole matrix. What we need are its diagonal entries (also referred to as the **leverage** in statistics jargon), an $n$-by-$1$ vector computed by your function `lo.lev`.
+
+In your `lo.lev` and `onestep_CV` functions, always use option `control = loess.control(surface = "direct")` when calling `loess`, which makes the loess model to run regression without any approximation.
+
+https://stat.ethz.ch/R-manual/R-devel/library/stats/html/loess.control.html
+
+### Test your function
+
+Test your function with data set [[Coding3_Data.csv](https://liangfgithub.github.io/F22/Coding3_Data.csv)]
+
+```{r, eval=FALSE}
+mydata = read.csv(file = "Coding3_Data.csv")
+dim(mydata)
+plot(mydata$x, mydata$y, xlab="", ylab="")
+```
+
+![](coding3_fig1.png)
+
+Create a grid of values for span: 15 values that are equally spaced between 0.20 and 0.90. Call your function `myCV` to compute the corresponding LOO-CV and GCV.
+
+```{r eval=FALSE}
+span1 = seq(from = 0.2, by = 0.05, length = 15 )
+cv.out = myCV(mydata$x, mydata$y, span1)
+```
+
+
+### Print out your results
+
+Print your results on LOO-CV and GCV. Both achieve their minimal at 0.5.
+```{r eval=FALSE}
+myout = data.frame(CV = cv.out$cv, 
+                   GCV = cv.out$gcv, 
+                   span = span1)
+myout$span[myout$GCV == min(myout$GCV)]
+myout$span[myout$CV == min(myout$CV)]
+myout
+```
+
+```
+          CV      GCV span
+1  12.416167 2.109088 0.20
+2   2.241351 1.489063 0.25
+3   1.502957 1.190075 0.30
+4   1.302611 1.155223 0.35
+5   1.223215 1.081272 0.40
+6   1.173550 1.046493 0.45
+7   1.121463 1.016964 0.50
+8   1.166369 1.105829 0.55
+9   1.172145 1.112322 0.60
+10  1.228412 1.158067 0.65
+11  1.273253 1.209565 0.70
+12  1.319765 1.266375 0.75
+13  1.514219 1.440057 0.80
+14  1.792494 1.703384 0.85
+15  1.878643 1.782755 0.90
+```
+
+### Plot the fitted curve
+
+Plot the data (red circles), the true curve (gray) and the fitted curve (blue dashed line) using the optimal span.
+
+```{r eval=FALSE}
+spangcv.min = 0.5
+plot(mydata$x, mydata$y, xlab="", ylab="", col="gray");
+fx = 1:50/50;
+fy = sin(12*(fx+0.2))/(fx+0.2)
+lines(fx, fy, col=8, lwd=2);
+f = loess(y ~ x, mydata, span = spangcv.min)
+lines(fx, predict(f, data.frame(x = fx), surface = "direct"), 
+      lty=2, lwd=2, col="blue")
+```
+
+![](coding3_fig2.png)
+
+---
+
+## Part II: Clustering time series (2pt) 
+
+Download the `Sales_Transactions_Dataset_Weekly_dataset` from UCI Machine Learning Repository [[Link](https://archive.ics.uci.edu/ml/datasets/Sales_Transactions_Dataset_Weekly)]
+
+
+This dataset contains weekly purchased quantities of 811 products over 52 weeks, i.e., each product has a time series with 52 measurements. For this assignment, we want to cluster time series with similar fluctuation patterns even if their means are different. So **remove the mean** from each time series and store the data as an 811-by-52 matrix $\mathbf{X}$.
+
+
+1. Fit each time series with a NCS with `df = 10`, which is equivalent to a NCS with 8 interior knots. That is, treat each row of $\mathbf{X}_{811 \times 52}$ as the response and the one-dimensional feature is just the index from 1 to 52. Save the corresponding coefficients (without the intercept) as an 811-by-9 matrix $\mathbf{B}_{811 \times 9}$.
+
+    The matrix $\mathbf{B}$ can be obtained as follows. Let $\mathbf{F}$ denote the 52-by-9 design matrix without the intercept, which, for example, can be obtained by calling the `ns` command in R. Remove the column mean from $\mathbf{F}$ as we do not care about the intercept. Then 
+$$
+  \mathbf{B}^t = (\mathbf{F}^t \mathbf{F})^{-1} \mathbf{F}^t\mathbf{X}^t.
+$$  
+The formula above is given for the transpose of $\mathbf{B}$, since the procedure is the same as fitting 811 linear regression models: the design matrix stays the same (i.e., $\mathbf{F}$) but the response vector --- there are 811 response vectors corresponding to the 811 rows of $\mathbf{X}$ --- would vary; each nine dimensional regression coefficient vector corresponds to a row in $\mathbf{B}$ (or equivalently, column in $\mathbf{B}^t$).
+  
+
+2. Run k-means algorithm on $\mathbf{B}$ to cluster the 811 products into 6 clusters. Display time series for products in the same cluster in one figure along with the corresponding cluster center; arrange the 6 figures in 2-by-3 format.
+
+3. Run k-means algorithm on $\mathbf{X}$ to cluster the 811 products into 6 clusters. Display time series for products in the same cluster in one figure along with the corresponding cluster center; arrange the 6 figures in 2-by-3 format.
+
+In this assignment, you will learn how to extract effective description of a curve (or time series) using local polynomials. You can view this procedure, from the row data $\mathbf{X}$ to $\mathbf{B}$ as a dimension reduction method for this dataset. (A type of data is called functional data, in which each observation corresponds to a curve/sequence observed at discrete points.) You'll find that the **cluster centers** from Step 2 is smoother than the centers from Step 3. 
+
+### Load Data
+```{r, eval=FALSE}
+set.seed(XXXX) 
+mydata = read.csv("~/Downloads/Sales_Transactions_Dataset_Weekly.csv")
+ts = as.matrix(mydata[, 2:53])
+row.names(ts) = mydata[,1]
+ts = ts - rowMeans(ts)
+```
+
+### Clustering with B
+
+![](coding3_fig3.png)
+
+
+
+### Clustering with X
+![](coding3_fig4.png)
+
+**Note**: of course, your plots will not look exactly the same as the ones shown above. 
+
+---
+
+## Part III: Ridgeless and double descent (1pt)
+
+So far, we have learned to use the U-shaped bias–variance trade-off curve to guide our model selection; e.g., ridge/lasso, tree pruning, and smoothing splines, just to name a few. 
+
+Interpolating training data, e.g., RSS = 0, is regarded as a warning sign of overfitting, and is expected to generalize poorly on unseen future test data. 
+
+
+> However, in modern practice, very rich models such as neural networks are trained to exactly fit (i.e., interpolate) the data. Classically, such models would be considered overfitted, and yet they often obtain high accuracy on test data. This apparent contradiction has raised questions about the mathematical foundations of machine learning and their relevance to practitioners. ([Belkin et al. 2019](https://liangfgithub.github.io/F22/DoubleDescent_PNAS_2019.pdf))
+
+In this assignment, we use **Ridgeless** to demonstrate this **double descent** behavior; our setup is similar to, but not the same as, Section 8 in [Hastie (2020)](https://liangfgithub.github.io/F22/Ridge_Hastie_2020.pdf). 
+
+
+### Load data
+
+Download [Coding3_dataH.csv](https://liangfgithub.github.io/F22/Coding3_dataH.csv). 
+
+```{r}
+myData = read.csv("Coding3_dataH.csv", header=FALSE)
+dim(myData)
+```
+
+Recall the dataset used in Coding 2 Part I, which has 506 rows (i.e., $n = 506$) and 14 columns: $Y$, $X_1$ to $X_{13}$. `myData` is created based on the dataset used in Coding 2 Part I, which has
+
+- 506 rows (i.e., $n = 506$), and
+ 
+- 241 columns with the first column being $Y$ and the remaining 240 corresponding to NCS basis functions of each of the 13 $X$ variales. (The number of knots are set differently for different features.)
+
+### Ridgeless 
+
+The so-called **ridgeless least squares** is essentially the same as principal component regression (PCR) using all principal components. In this simulation study, let us stick to the version of PCR with option `scale = FALSE`; that is, we only center (not scale) each column of the design matrix of the training data.
+
+Write a function that takes training and test data sets as input and outputs the training and test errors of the ridgeless estimator; in both training/test datasets, the first column is the response vector $Y$. 
+
+- You can use R/Python packages or built-in functions for PCA/SVD, but you cannot use any packages or built-in functions for linear regression, principal components regression, or ridge regression. 
+
+    After PCA/SVD, the new design matrix has orthogonal columns and least squares coefficients can be easily computed using matrix multiplication without inverting any matrices. 
+
+- For computation stability, you need to drop directions whose eigen-values (if using PCA) or singular values (if using SVD) are too small. For example, I set `eps = 1e-10` as the lower bound for singular values.
+
+- Training errors are not needed in our simulation study; but I would suggest including it in the `ridgeless` output for debugging: your training error should be the same as RSS from an ordinarly linear regression model. 
+
+
+```{r, eval=FALSE}
+ridgeless = function(train, test, eps = 1e-10){
+  Xtrain = train[, -1]
+  Ytrain = train[, 1]
+  Xtest = test[, -1]
+  Ytest  = test[, 1]
+  
+  Xtrain = scale(Xtrain, center = TRUE, scale = FALSE)
+  Xmean = attr(Xtrain, "scaled:center")
+  Xtest = scale(Xtest, Xmean, scale = FALSE)
+  
+  ##############################################
+  # Your code for computing Ytrain.hat and Ytest.hat
+  ##########################################
+  
+  return(list(
+    train.err = mean((Ytrain - Ytrain.hat)^2), 
+    test.err = mean ((Ytest - Ytest.hat)^2)
+  ))
+}
+```
+
+### Simulation study
+
+Run the following procedure $T = 30$ times. In each iteration, 
+
+- Randomly split `myData` into training (25\%) and test (75\%). 
+- Record the test error from `ridgeless` using the first $d$ columns of `myData`, where $d = 6:241$. 
+
+For each iteration, you should record 236 test errors (averaged mean squared errors on the test data). You can, for example, store all test errors from this simulation study in a 30-by-236 matrix.  
+
+### Graphical display
+
+Display the median test error (over the 30 iterations) **in log scale** versus the number of regression parameters (starting from 5 to 240). Can you see the double descent pattern? 
+
+![](coding3_fig5.png)
+
+---
+## What to Submit
+* A Markdown (or Notebook) file in HTML format, which contains all necessary code and the corresponding output/results.
+
+* Set the seed at the beginning of Part II and Part III to be the last 4-dig of your UIN. So we can get the same simulation results if we re-run your code. 
+
+    You do not need to set seed for Part I as nothing is random.
+
+* Name your file starting with 
+  
+  <span style="color: red;">Assignment_3_xxxx netID</span>
+  
+  where “xxxx” is the last 4-dig of your UIN and make sure the same 4-dig is used as the seed in your code.
+  

@@ -1,41 +1,58 @@
+library(dplyr)
+
+data <- read.csv("Ames_data.csv", stringsAsFactors = FALSE)
+testIDs <- read.table("project1_testIDs.dat")
+
+save_splits = function(data, testIDs) {
+  
+  for(j in 1:dim(testIDs)[2]) {
+    
+    train <- data[-testIDs[,j], ]
+    test <- data[testIDs[,j], ]
+    test.y <- test[, c(1, 83)]
+    test <- test[, -83]
+    write.csv(train, paste("train_", j, ".csv", sep=""),row.names=FALSE)
+    write.csv(test, paste("test_", j, ".csv", sep=""),row.names=FALSE)
+    write.csv(test.y,paste("test_y_", j, ".csv", sep=""),row.names=FALSE)
+  }
+}
+
+## Save 3 files for each split, train_j.csv, test_j.csv, test_y_j.csv
+save_splits(data, testIDs)
+
+## Test a submission file on a split
+test_submission = function(submi_file, benchmk, split) {
+  
+  test.y = read.csv('test_y.csv', stringsAsFactors = FALSE)
+  
+  pred = read.csv(submi_file)
+  names(test.y)[2] = "True_Sale_Price"
+  pred = merge(pred, test.y, by="PID")
+  rmse = sqrt(mean((log(pred$Sale_Price) - log(pred$True_Sale_Price))^2))
+  
+  print(paste("submission1 on split=", split, " - ", (rmse < benchmk), " - rmse=", rmse))  
+}
 
 
-load_split = function(j) {
+for (j in 1:10) {
+
+  # Prepare files for jth file
   train_name = paste("train_", j, ".csv", sep="")
   test_name = paste("test_", j, ".csv", sep="")
   y_name = paste("test_y_", j, ".csv", sep="")
   
-  data = list(
-    train = read.csv(train_name, stringsAsFactors = FALSE),
-    test = read.csv(test_name, stringsAsFactors = FALSE),
-    y = read.csv(y_name, stringsAsFactors = FALSE)
-  )
+  file.copy(train_name, 'train.csv', overwrite = TRUE)
+  file.copy(test_name, 'test.csv', overwrite = TRUE)
+  file.copy(y_name, 'test_y.csv', overwrite = TRUE)
   
-  return(data)
-}
-
-benchmk1 = 0.125
-for (j in 1:10) {
-  print(paste("###### Test on split ", j, "#####"))
-  # Prepare files for jth file
-  jth = load_split(i)
-  write.csv(train, "train.csv", row.names=FALSE)
-  write.csv(test, "test.csv", row.names=FALSE)
+  benchmk = ifelse(j <= 5, 0.125, 0.135)
+  print(paste("###### Test on split ", j, ", benchmark ", benchmk, " #####"))
   
+  ptm <- proc.time()
   source("mymain.R")
+  sprintf(fmt = "\nTotal execution time: (%.2f seconds)\n", 
+          (proc.time() - ptm)[['elapsed']]) %>% cat()
   
-  rmse = test_split(i, lasso_eval)
-  print(rmse)
-  print(rmse < benchmk)
-}
-
-uin_4 = 15052
-set.seed(uin_4)
-
-benchmk = 0.135
-for (i in 1:5) {
-  print(paste("###### Test on split ", (i+5), "#####"))
-  rmse = test_split(i+5, lasso_eval)
-  print(rmse)
-  print(rmse < benchmk)
+  test_submission("mysubmission1.txt", benchmk, j)
+  test_submission("mysubmission2.txt", benchmk, j)
 }
