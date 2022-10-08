@@ -1,0 +1,402 @@
+---
+title: "Coding 3 - PSL 598, Fall 2022"
+author: "Alejandro Pimentel (netID ap41,UIN 659282110)"
+date: ''
+output:
+  html_document: 
+    theme: readable
+    toc: yes
+    toc_float: TRUE
+    code_folding: show
+    code_download: true
+  pdf_document: default
+urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
+---
+
+## Part I: Optimal span for loess (2pt)
+
+Using `LOO-CV` and `GCV` we select the optimal span for `loess`. 
+
+### Functions declaration
+
+- `lo.lev`, extracts the diagonal elements of matrix $S$ for a given `span`.
+- `onestep_CV`, Computes `GCV` and `LOO-CV` based on `diag(S)`.
+- `myCV`, gathers `GCV` and `LOO-CV` for a set of `span` values.
+
+```{r}
+lo.lev <- function(x1, sp) {
+  # x1: n-by-1 feature vector
+  # sp: a numerical value for "span"
+  
+  n = length(x1);
+  lev = rep(0, n)
+  
+  ##############################################
+  # Compute the diagonal entries of the 
+  # smoother matrix S and 
+  # store it in a vector "lev"
+  ##############################################
+  
+  for(i in 1:n){
+    y = rep(0, n); y[i]=1;
+    yi = loess(y ~ x1, data = data.frame(cbind(x1, y)), span = sp, 
+               control = loess.control(surface = "direct"))$fitted
+    # Add element of S matrix's diaginal 
+    lev[i]= yi[i];
+  } 
+  
+  return(lev)
+}
+
+onestep_CV <- function(x1, y1, sp) {
+  
+  lom = loess(y1 ~ x1, data = data.frame(cbind(x1, y1)), span = sp, 
+              control = loess.control(surface = "direct"))
+  y_res = lom$residuals
+  S_diag = lo.lev(x1, sp)
+  
+  loocv = mean((y_res / (1 - S_diag))^2)
+  mean_tr = sum(S_diag) / length(x1)
+  gcv = mean((y_res / (1 - mean_tr))^2)
+  
+  return(list(cv = loocv, gcv = gcv))
+}
+
+myCV <- function(x1, y1, span) {
+  # x1: feature vector of length n
+  # y1: response vector of length n
+  # span: a sequence of values for "span"
+  
+  m = length(span)
+  cv = rep(0, m)
+  gcv = rep(0, m)
+  
+  for(i in 1:m){
+    tmp = onestep_CV(x1, y1, span[i])
+    cv[i] = tmp$cv
+    gcv[i] = tmp$gcv
+  }
+  return(list(cv = cv, gcv = gcv))
+}
+```
+
+
+### Test function
+
+In this section we test the function with the data set [[Coding3_Data.csv](https://liangfgithub.github.io/F22/Coding3_Data.csv)]
+
+```{r}
+mydata = read.csv(file = "Coding3_Data.csv")
+dim(mydata)
+plot(mydata$x, mydata$y, xlab="", ylab="")
+```
+
+Grid of values for span: 15 values that are equally spaced between 0.20 and 0.90. 
+
+```{r}
+span1 = seq(from = 0.2, by = 0.05, length = 15 )
+```
+
+Call our function.
+
+```{r}
+cv.out = myCV(mydata$x, mydata$y, span1)
+```
+
+### Print out results
+
+Results on LOO-CV and GCV. Both achieve their minimal at 0.5.
+
+```{r}
+myout = data.frame(CV = cv.out$cv, 
+                   GCV = cv.out$gcv, 
+                   span = span1)
+myout$span[myout$GCV == min(myout$GCV)]
+myout$span[myout$CV == min(myout$CV)]
+myout
+
+spangcv.min = myout[which.min(myout$CV), ]$span
+
+```
+
+### Plot the fitted curve
+
+Plot the data (red circles), the true curve (gray) and the fitted curve (blue dashed line) using the optimal span.
+
+```{r}
+# data points
+plot(mydata$x, mydata$y, xlab="", ylab="", col="red");
+
+# True curve
+fx = 1:50/50;
+fy = sin(12*(fx+0.2))/(fx+0.2)
+lines(fx, fy, lwd=2, col="gray");
+
+# Fitted curve
+f = loess(y ~ x, mydata, span = spangcv.min)
+lines(fx, predict(f, data.frame(x = fx), surface = "direct"), 
+      lty=2, lwd=2, col="blue")
+```
+
+
+---
+
+```{r}
+# Set a seed to have a stable generation of random numbers
+uin_4 = 2110
+set.seed(uin_4)
+```
+
+## Part II: Clustering time series (2pt) 
+
+For this part we use the data set `Sales_Transactions_Dataset_Weekly_dataset` from UCI Machine Learning Repository [[Link](https://archive.ics.uci.edu/ml/datasets/Sales_Transactions_Dataset_Weekly)]
+
+This dataset contains weekly purchased quantities of 811 products over 52 weeks, i.e., each product has a time series with 52 measurements. We want to cluster time series with similar fluctuation patterns even if their means are different. So we **remove the mean** from each time series and store the data as an 811-by-52 matrix $\mathbf{X}$.
+
+### Load the data
+
+```{r}
+library(splines)
+
+mydata = read.csv("ST_Weekly.csv", header=TRUE)
+
+X = as.matrix(mydata[, 2:53])
+row.names(X) = mydata[,1]
+# center each time series 
+X = X - rowMeans(X)
+```
+
+
+### Obtain the B matrix
+
+We obtain the design matrix $\mathbf{F}$ as follows, `x` is just a sequence from 1 to 52 that corresponds to each week (column) in `X`.
+
+```{r}
+x = 1:52
+F_ = ns(x, df=9, intercept=FALSE)
+
+```
+
+Subtract the mean column-wise from $\mathbf{F}$ as we do not care about the intercept.
+
+```{r}
+# Center the basis functions since we are not estimating the intercept.
+F_ = scale(F_, center = TRUE, scale = FALSE)
+```
+
+
+Next we obtain the matrix $\mathbf{B}$ as follows.  
+
+$$
+  \mathbf{B}^t = (\mathbf{F}^t \mathbf{F})^{-1} \mathbf{F}^t\mathbf{X}^t.
+$$  
+
+```{r}
+Ft = t(as.matrix(F_))
+Bt = solve(Ft %*% F_) %*% Ft %*% t(X)
+B = t(Bt)
+```
+
+
+### Clustering with B
+
+Now we run k-means algorithm on $\mathbf{B}$ to cluster the 811 products into 6 clusters. 
+
+```{r}
+Bkm = kmeans(B, centers=6, nstart=10)
+```
+
+The following function is used to display time series for products in the same cluster in one figure along with the corresponding cluster center; since we used `K=6` we arrange the 6 figures in 2-by-3 format.
+
+```{r fig1, fig.width = 8, fig.height=6}
+show_graphs = function(km, ts_data, fx, centers_fn) {
+  par(mfrow = c(2, 3))
+  for(ci in 1:6) {
+    ts_idxs = which(km$cluster == ci)
+    ts_cluster_i = ts_data[ts_idxs, ]
+    
+    xl = c(1, 52)
+    yl = c(min(ts_data), max(ts_data))
+    
+    plot(NULL, NULL, 
+         xlab = "Weeks",
+         ylab = "Sales",
+         xlim = xl, 
+         ylim = yl, col = "gray")
+    
+    for(j in 1:dim(ts_cluster_i)[1]) {
+      lines(x = fx, y = ts_cluster_i[j,], col = "gray")
+    }
+    
+    ci_center = centers_fn(km$centers[ci, ])
+    lines(x = fx, y = ci_center, col="red")
+  }
+}
+
+# Here we pass a function to transform the centers based on the design matrix F.
+show_graphs(Bkm, X, x, function(centers) F_ %*% centers)
+```
+
+
+### Clustering with X
+
+Lastly, we do the same but instead of using $\mathbf{B}$ for K-means, we use the original time series in `X` so we can compare the curves that describe the 6 clusters.
+
+```{r fig2, fig.width = 8, fig.height=6}
+TSkm = kmeans(X, centers=6, nstart=10)
+
+# In this case, no transformation is needed for the centers.
+show_graphs(TSkm, X, x, function(centers) centers)
+```
+
+
+---
+
+```{r}
+# Set a seed to have a stable generation of random numbers
+uin_4 = 2110
+set.seed(uin_4)
+```
+
+## Part III: Ridgeless and double descent (1pt)
+
+So far, we have learned to use the U-shaped bias–variance trade-off curve to guide our model selection; e.g., ridge/lasso, tree pruning, and smoothing splines, just to name a few. 
+
+Interpolating training data, e.g., RSS = 0, is regarded as a warning sign of overfitting, and is expected to generalize poorly on unseen future test data. 
+
+
+> However, in modern practice, very rich models such as neural networks are trained to exactly fit (i.e., interpolate) the data. Classically, such models would be considered overfitted, and yet they often obtain high accuracy on test data. This apparent contradiction has raised questions about the mathematical foundations of machine learning and their relevance to practitioners. ([Belkin et al. 2019](https://liangfgithub.github.io/F22/DoubleDescent_PNAS_2019.pdf))
+
+In this assignment, we use **Ridgeless** to demonstrate this **double descent** behavior; our setup is similar to, but not the same as, Section 8 in [Hastie (2020)](https://liangfgithub.github.io/F22/Ridge_Hastie_2020.pdf). 
+
+
+### Load data
+
+Download [Coding3_dataH.csv](https://liangfgithub.github.io/F22/Coding3_dataH.csv). 
+
+```{r}
+myData = read.csv("Coding3_dataH.csv", header=FALSE)
+dim(myData)
+```
+
+Recall the dataset used in Coding 2 Part I, which has 506 rows (i.e., $n = 506$) and 14 columns: $Y$, $X_1$ to $X_{13}$. `myData` is created based on the dataset used in Coding 2 Part I, which has
+
+- 506 rows (i.e., $n = 506$), and
+ 
+- 241 columns with the first column being $Y$ and the remaining 240 corresponding to NCS basis functions of each of the 13 $X$ variales. (The number of knots are set differently for different features.)
+
+### Ridgeless 
+
+The so-called **ridgeless least squares** is essentially the same as principal component regression (PCR) using all principal components. In this simulation study, let us stick to the version of PCR with option `scale = FALSE`; that is, we only center (not scale) each column of the design matrix of the training data.
+
+Below, we write a function that takes training and test data sets as input and outputs the training and test errors of the ridgeless estimator; in both training/test datasets, the first column is the response vector $Y$. 
+
+```{r}
+ridgeless = function(train, test, eps = 1e-10){
+  Xtrain = train[, -1]
+  Ytrain = train[, 1]
+  Xtest = test[, -1]
+  Ytest  = test[, 1]
+  
+  Xtrain = scale(Xtrain, center = TRUE, scale = FALSE)
+  Xmean = attr(Xtrain, "scaled:center")
+  Xtest = scale(Xtest, Xmean, scale = FALSE)
+
+  # Singular Value Decomposition on Xtrain
+  s = svd(Xtrain)
+  
+  # We use eps as the minimum for principal components
+  # to consider.
+  d = sum(s$d > eps)
+  
+  # s$d is of len n when n < p, it is len(p) otherwise.
+  # so d here can be equals to n or p, this is just how
+  # SVD works.
+  D_dd = diag(s$d[1:d])
+  # n * d
+  U_nd = s$u[, 1:d]
+  # p x d
+  V_pd = s$v[, 1:d]
+  
+  # 2 ways to get the principal components of Xtrain
+  # F_nd = U_nd %*% D_dd
+  F_nd = Xtrain %*% V_pd
+  
+  #A_hat = t(F_nd) %*% Ytrain / colSums(F_nd^2)
+  A_hat = t(F_nd) %*% Ytrain / colSums(D_dd^2)
+  intercept = mean(Ytrain)
+  
+  # We estimate y_train_hat using the principal components of Xtrain
+  # and the coefficients A_hat (of size d)
+  Ytrain.hat = F_nd %*% A_hat + intercept
+  mean((Ytrain - Ytrain.hat)^2)
+  
+  # A_hat is just limited to size d
+  # For prediction we need p coefficients
+  B_hat = V_pd %*% A_hat 
+  
+  # prediction
+  Ytest.hat = Xtest %*% B_hat + intercept  
+  
+  # Fit lm model for reference 
+  lm_mod = lm(V1 ~ ., data = train)  
+  
+  return(list(
+    train.err = mean((Ytrain - Ytrain.hat)^2), 
+    train.lm.err = mean((Ytrain - lm_mod$fitted.values)^2),
+    test.err = mean ((Ytest - Ytest.hat)^2)
+  ))
+}
+```
+
+
+### Simulation study
+
+The following procedure is executed $T = 30$ times. In each iteration, 
+
+- Randomly split `myData` into training (25\%) and test (75\%). 
+- Record the test error from `ridgeless` using the first $d$ columns of `myData`, where $d = 6:241$. 
+
+For each iteration, we record 236 test errors (averaged mean squared errors on the test data).  
+
+```{r}
+T = 30
+n = dim(myData)[1]
+ncols = dim(myData)[2]
+sim_results = matrix(nrow = T, ncol = ncols - 5)
+
+for(t in 1:T) {
+
+  ntest = round(n * 0.75)  # test set size
+  ntrain = n - ntest
+  
+  test.ids = sample(1:n, ntest)
+  test = myData[test.ids,]
+  train = myData[-test.ids,]  
+  
+  for(d in 6:ncols) {
+    #print(dim(train[, 1:d]))
+    errs = ridgeless(train[, 1:d], test[, 1:d])
+    sim_results[t, d-5] = errs$test.err
+  }
+}
+```
+
+
+### Graphical display
+
+Median test error (over the 30 iterations) **in log scale** versus the number of regression parameters (starting from 5 to 240). 
+
+The graph below shows the mentioned double descent.
+
+```{r}
+log_median_errs = log(apply(sim_results, 2, median))
+
+par(mfrow = c(1, 1))
+plot(1:(ncols-5), log_median_errs, xlab='# of features', 
+     ylab='Log Median Test Error', col="blue", cex=1.5)
+```
+
+

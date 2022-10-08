@@ -82,7 +82,7 @@ Here is how we obtain the DR basis: we first obtain the smoother matrix S (which
 S=F(Ft*F + lambda*omega)*Ft
 
 The smooth function does not depend on y.
-This for mula is similar to the projection matrix for Ridge Regression.
+This formula is similar to the projection matrix for Ridge Regression.
 
 ```{r}
 smooth.matrix = function(x, df){
