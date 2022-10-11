@@ -30,7 +30,7 @@ test_submission = function(submi_file, benchmk, split) {
   pred = merge(pred, test.y, by="PID")
   rmse = sqrt(mean((log(pred$Sale_Price) - log(pred$True_Sale_Price))^2))
   
-  print(paste("submission1 on split=", split, " - ", (rmse < benchmk), " - rmse=", rmse))  
+  print(paste(submi_file, " on split=", split, " - ", (rmse < benchmk), " - rmse=", rmse))  
 }
 
 
@@ -49,7 +49,8 @@ for (j in 1:10) {
   print(paste("###### Test on split ", j, ", benchmark ", benchmk, " #####"))
   
   ptm <- proc.time()
-  source("mymain.R")
+  #source("mymain.R")
+  source("ap41_mymain_10am.R")
   sprintf(fmt = "\nTotal execution time: (%.2f seconds)\n", 
           (proc.time() - ptm)[['elapsed']]) %>% cat()
   

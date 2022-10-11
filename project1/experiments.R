@@ -2,13 +2,14 @@
 library(ggcorrplot)
 library(dplyr)
 
-df <- read.csv("Ames_data.csv")
+df <- read.csv("Ames_data.csv", stringsAsFactors = FALSE)
 
-df <- df[, colSums(is.na(df)) == 0]
+#df <- df[, colSums(is.na(df)) == 0]
 df <- df[, -1]
 df$Sale_Price = log(df$Sale_Price)
 
 
+sum(is.na(df$Garage_Yr_Blt))
 
 df = convert_factors(df)
 str(df)
@@ -16,6 +17,7 @@ str(df)
 classes <- sapply(df, class)
 df_num <- df[, classes == "numeric" | classes == "integer"]
 fact_names <- names(df[, classes == "factor"])
+df_facts <- df[, classes == "factor"]
 cor <- cor(df_num)
 ggcorrplot(cor, hc.order = TRUE, insig = "blank",
            type = "lower", ggtheme = theme_gray,
@@ -64,3 +66,18 @@ sapply(df_int, function(x) n_distinct(x))
 ridxs = sample(1:dim(df_int)[1], 30)
 df_int[ridxs, ]$BsmtFin_SF_1
 
+df = drop_irrelevant(df, irrelevant_cols)
+df2 = winsorization(df)
+
+## Looking for columns with many repeated values.
+for(cn in colnames(df)) {
+  counts = as.data.frame(table(df[, cn]))
+  counts$percentage = counts$Freq / 2930 *100
+  if(any(counts$percentage > 95.0)) {
+    print(paste("###", cn, "###"))
+    print(counts) 
+  }
+}
+
+## Enconding factors
+df2 = expand_factors(df, use_ref_lvl = FALSE)

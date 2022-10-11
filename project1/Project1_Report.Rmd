@@ -1,0 +1,163 @@
+---
+title: "Project1 - PSL 598, Fall 2022"
+author: "Alejandro Pimentel (netID ap41,UIN 659282110)"
+date: ''
+output:
+  html_document: 
+    theme: readable
+    toc: yes
+    toc_float: TRUE
+    code_download: true
+  pdf_document: default
+urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
+---
+```{r include = FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+```
+
+## Predict the Housing Prices in Ames
+
+### Data set
+
+- TITLE: Ames Iowa: Alternative to the Boston Housing Data Sey.
+- SIZE: 2930 observations, 82 variables
+
+Ames_data.csv contains information from the Ames Assessor’s Office used in computing assessed values for individual residential properties sold in Ames, IA from 2006 to 2010.
+
+The first column is “PID”, the Parcel identification number;
+The last column is the response variable, Sale_Price;
+The remaining 81 columns are explanatory variables describing various aspects of residential homes.
+
+### Goal
+
+The goal is to predict the price of a home (in log scale) with those explanatory variables. We built TWO prediction models:
+
+- Variable selection with Lasso followed by Ridge Regression with those variables.
+- Boosting tree.
+
+Both models are tested on 10 predefined splits. For the first 5 splits the benchmark to beat is `0.125` and for the remaining 5 is `0.135`.
+
+### Pre-Procesing
+
+For both types of models the data was processed as follows:
+
+1. Removed predictors which 96% or more of it's values is the same. Example:
+
+```{r}
+df <- read.csv("Ames_data.csv")
+
+df <- df[, colSums(is.na(df)) == 0]
+df <- df[, -1]
+df$Sale_Price = log(df$Sale_Price)
+
+counts = as.data.frame(table(df[, 'Heating']))
+counts$percentage = counts$Freq / 2930 *100
+paste("###", "Heating", "###")
+counts
+```
+
+2. For continuous predictors applied winsorization at quantile cut of 95%.
+
+For example, the distribution for `Lot_Area` shows most values being under ~2000.
+
+```{r}
+plot(df$Lot_Area)
+```
+
+After applying winsorization we bring potential outliers closer to the rest of the data points. 
+
+```{r}
+var <- "Lot_Area"
+tmp <- df[, var]
+myquan <- quantile(tmp, probs = 0.95, na.rm = TRUE)
+tmp[tmp > myquan] <- myquan
+df[, var] <- tmp
+plot(df$Lot_Area)
+```
+
+3. The categorical variables were encoded as `K dummy variables` where `K` is the number of levels. Example:
+
+```{r}
+var = "Foundation"
+mylevels <- sort(unique(df[, var]))
+m <- length(mylevels)
+m <- ifelse(m>2, m, 1)
+
+col.names <- NULL
+for(j in 1:m){
+  col.names <- c(col.names, paste(var, '_', mylevels[j], sep=''))
+}
+var
+mylevels
+col.names
+```
+
+4. For missing values, only `Garage_Yr_Blt` had `NA` values which we set to `0`.
+
+5. Based on the correlation of some continuous predictors with `Sale_Price` I tried non-linear transformations without almost any performance improvement. So those were removed from the final version.
+
+6. Although originally the pre-processing diverged for the 2 models, as testing progressed, both ended up using the same pre-processed data.
+
+## Results
+
+*Computer System used: Intel i7-8850H CPU @ 2.6GHz, RAM 48.0 GB*
+
+Although both models have very similar results, we can notice a few points:
+
+- For the first 5 splits, boosting performs slightly better.
+- Boosting takes longer to train.
+
+```{r message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+
+gen_kable <- function(table_data, add_row_names = FALSE, caption = "", col_names = c(), row_names = c()) {
+  #f_data <- format_numerics(table_data) 
+  if(length(col_names) != 0){
+    colnames(table_data) <- col_names
+  }
+  if(length(row_names) != 0){
+    rownames(table_data) <- row_names
+  }  
+  table_data %>%
+  kable(., format = "html", row.names = add_row_names,
+        caption = caption, escape = FALSE) %>%
+    kable_styling(bootstrap_options = c("striped", "hover"),
+                  full_width = F,
+                  font_size = 14,
+                  position = "center")
+}
+
+rmse_lasso = c(0.12471,0.12087,0.11977,0.12143,0.11406,0.13228,0.12546,0.11845,0.13029,0.12471)
+rmse_boost = c(0.11686,0.11902,0.11608,0.11377,0.10727,0.12868,0.13330,0.12417,0.13226,0.12683)
+
+results <- data.frame(
+  #row.names = c("sigma=1", "sigma=5", "sigma=10"),
+  "Split Num" = 1:10,
+  "RMSE Lasso" = rmse_lasso,
+  "RMSE Boosting" = rmse_boost,
+  "Benchmark" = c(rep(0.125, 5), rep(0.135, 5)),
+  "Lasso train time secs." = c(3.11,2.53,2.66,2.71,2.53,2.87,2.27,2.43,3.41,2.60),
+  "Boosting train time secs." = c(44.31,46.71,43.69,40.88,37.86,46.29,45.39,44.45,43.33,37.64)
+)
+
+gen_kable(results, caption = "RMSE and training times per data split", col_names = c("Split #", "RMSE Lasso", "RMSE Boosting", "Benchmark", "Lasso training time (s)", "Boosting training time (s)"))
+```
+
+### Comparing both RMSE results for each type of model.
+
+Both models performance is very similar. One could argue `variance` for `Boosting` is a bit higher but the difference is very small when looking at the numbers.
+
+```{r fig.width = 8, fig.height=6}
+rmse = cbind(rmse_lasso, rmse_boost)
+bo = boxplot(rmse,  col = terrain.colors(5, alpha = 0.5))
+
+for(i in 1:dim(rmse)[2]) {
+  mses = rmse[, i]
+  myjitter = jitter(rep(i, length(mses)), amount = 0.15)
+  points(myjitter, mses, pch=19, col=rgb(0,0,0,.9))
+}
+```
+

@@ -101,6 +101,7 @@ conciliate_predictors = function(dftrnames, dfte) {
 # Step 1: Preprocess training data
 #         and fit two models
 #
+ptmtd <- proc.time()
 train <- read.csv("train.csv", stringsAsFactors = FALSE)
 #
 # YOUR CODE
@@ -151,6 +152,8 @@ train = cbind(train.x, train.y)
 
 X = data.matrix(train.x)  
 Y = train$Sale_Price
+print(paste("Process train data time: ", 
+            (proc.time() - ptmtd)[['elapsed']], sep = ''))
 
 ptml <- proc.time()
 lasso.out = cv.glmnet(X, Y, alpha = 1) 
@@ -173,6 +176,7 @@ print(paste("Boosting time: ", (proc.time() - ptmb)[['elapsed']], sep = ''))
 # Step 2: Preprocess test data
 #         and output predictions into two files
 #
+ptmted <- proc.time()
 test <- read.csv("test.csv", stringsAsFactors = FALSE)
 #
 # YOUR CODE
@@ -196,7 +200,10 @@ test_c = conciliate_predictors(train_names, test)
 ## Matrix forms
 #X_test = data.matrix(test)
 X_test = data.matrix(test_c$test_df)
+print(paste("Process test data time: ", 
+            (proc.time() - ptmted)[['elapsed']], sep = ''))
 
+ptmp <- proc.time()
 Ytest.pred = predict(ridge.out, s = ridge.out$lambda.min, 
                      newx = X_test[, sel.vars])
 
@@ -209,3 +216,5 @@ Ytest.pred = predict(xgb.model, X_test)
 names(Ytest.pred) = c('Sale_Price')
 mysubmission2_df = data.frame(PID=pids, Sale_Price=exp(Ytest.pred), row.names = NULL)
 write.csv(mysubmission2_df, "mysubmission2.txt", row.names=FALSE)
+print(paste("Prediction time: ", 
+            (proc.time() - ptmp)[['elapsed']], sep = ''))

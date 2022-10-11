@@ -158,8 +158,9 @@ winsorization = function(df, quantile_cut = 0.95) {
                    "Second_Flr_SF", 'First_Flr_SF', 
                    "Gr_Liv_Area", "Garage_Area", 
                    "Wood_Deck_SF", "Open_Porch_SF", 
-                   "Enclosed_Porch", "Three_season_porch",
-                   "Screen_Porch", "Misc_Val")
+                   "Enclosed_Porch", 
+                   "Screen_Porch"
+  )
  
   for(var in winsor.vars){
     tmp <- df[, var]
@@ -182,7 +183,7 @@ expand_predictors = function(df) {
   return(exp_df)
 }
 
-expand_factors = function(df) {
+expand_factors = function(df, use_ref_lvl = TRUE) {
   #df # train data without "PID" and "Sale_Price"
   
   categorical.vars = colnames(df)[
@@ -197,15 +198,21 @@ expand_factors = function(df) {
   for(var in categorical.vars){
     mylevels <- sort(unique(df[, var]))
     m <- length(mylevels)
-    m <- ifelse(m>2, m, 1)
+    if(use_ref_lvl) {
+      m <- ifelse(m>2, m, 1)
+    }
     new_columns <- matrix(0, n.train, m)
+    print(paste("###", var, "###"))
+    print(mylevels)
     col.names <- NULL
     for(j in 1:m){
       new_columns[df[, var]==mylevels[j], j] <- 1
       col.names <- c(col.names, paste(var, '_', mylevels[j], sep=''))
     }
     colnames(new_columns) <- col.names
+    print(col.names)
     new_df <- cbind(new_df, new_columns)
+    
   }
   
   return(new_df)
@@ -327,12 +334,17 @@ test_split = function(jth_split, evaluation_fn) {
                       'Condition_2',
                       'Roof_Matl',
                       'Heating',
-                      'Pool_QC',
                       'Low_Qual_Fin_SF',
+                      "Three_season_porch", #winzo?
                       'Pool_Area',
+                      'Pool_QC',
+                      'Misc_Feature', #?
+                      'Misc_Val', #winzo?
                       'Longitude','Latitude'
   )
+  #print(train$Three_season_porch)
   train = drop_irrelevant(train, irrelevant_cols)
+  #print(test$Three_season_porch)
   test = drop_irrelevant(test, irrelevant_cols)
   
   ## winsorization
@@ -369,11 +381,11 @@ test_split = function(jth_split, evaluation_fn) {
   #test = expand_predictors(test)
   
   ## Encode factors
-  train.x = expand_factors(train.x)
+  train.x = expand_factors(train.x, use_ref_lvl = TRUE)
   train.x = order_predictors(train.x)
   #print(colnames(train.x))
   train = cbind(train.x, train.y)
-  test = expand_factors(test)
+  test = expand_factors(test, use_ref_lvl = TRUE)
   
   
   ## Conciliate before testing

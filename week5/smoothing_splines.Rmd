@@ -57,12 +57,12 @@ When df is small, lambda is large. This means high penalization and results on a
 par(mfrow=c(2,2));      # 2x2 (totally 4) subplots
 plot(x,y, xlab='x', ylab='y');
 lines(fx, fy, col=8, lwd=1.5);
-lines(predict(smooth.spline(x, y, df=5),fx),  lty=2, col='blue', lwd=1.5);
+lines(predict(smooth.spline(x, y, df=5.7),fx),  lty=2, col='blue', lwd=1.5);
 title('df=5');
 
 plot(x,y,xlab='x', ylab='y');
 lines(fx, fy, col=8, lwd=1.5);
-lines(predict(smooth.spline(x, y, df=9),fx),  lty=2, col='blue', lwd=1.5);
+lines(predict(smooth.spline(x, y, df=9.2),fx),  lty=2, col='blue', lwd=1.5);
 title('df=9');
 
 plot(x,y,xlab='x', ylab='y');
