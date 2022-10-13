@@ -2,6 +2,8 @@
 title: "Clustering"
 output: html_document
 date: "2022-10-08"
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -47,19 +49,277 @@ plot(tmp[, 1], tmp[, 2], type="n", xlab="", ylab="",
 text(tmp[, 1], tmp[, 2], label = letters)
 ```
 
+## K-means
 
+Run K-means with K=2 and 3.
 
+```{r}
+source("sportsranks.txt");
+head(sportsranks)
+```
 
+```{r}
+km2=kmeans(sportsranks, centers=2, nstart=10)
+km3=kmeans(sportsranks, centers=3, nstart=10)
+```
 
+View the clusters in MDS plots.
 
+```{r}
+D=dist(sportsranks)
+Xmds=cmdscale(D);
 
+par(mfrow=c(1,2));
+plot(Xmds[,1], Xmds[,2], type="n", xlab="", ylab="")
+points(Xmds[,1], Xmds[,2], pch=km2$cluster, col=km2$cluster);
+title("MDS plot for K=2")
+plot(Xmds[,1], Xmds[,2], type="n", xlab="", ylab="");
+points(Xmds[,1], Xmds[,2], pch=km3$cluster, col=km3$cluster);
+title("MDS plot for K=3")
+```
 
+How is cMDS computed?
 
+```{r}
+D2 = as.matrix(D^2)
+n = dim(D2)[1]
+tmp = D2 - matrix(colMeans(D2), nrow=n, ncol=n, byrow=TRUE) - 
+  matrix(rowMeans(D2), nrow=n, ncol=n, byrow=FALSE)
+tmp = -(tmp + mean(D2))/2
+tmp.svd = svd(tmp)
+F = tmp.svd$u[, 1:2]  %*% diag(sqrt(tmp.svd$d[1:2]))
+cor(F, Xmds)
+```
 
+## Gap Statistics
 
+You can use clusGap from cluster package to compute gap statistic.
 
+```{r}
+library(cluster)
+set.seed(123)
+gap_stat = clusGap(sportsranks, FUN = kmeans, nstart = 25,
+                    K.max = 10, B = 50)
+print(gap_stat, method = "firstmax")
+```
 
+```{r}
+plot(gap_stat, frame = FALSE, xlab = "Number of clusters k")
+abline(v = 2, lty = 2)
+```
 
+Next we compute gap statistic step by step.
+
+Step 1. Calculate Within-Cluster-SS for different K
+
+```{r}
+n=130;
+SS=rep(0,10)
+SS[1]=sum(diag(var(sportsranks)))*(n-1);
+for(k in 2:10){
+      kms=kmeans(sportsranks, centers=k, nstart=10);
+      SS[k]=sum(kms$withinss);
+}
+lss=log(SS)
+```
+
+Step 2. Calculate SS_0(K) under the null hypothesis
+
+```{r}
+n = dim(sportsranks)[1] 
+m = 7  # each review is a permutation of numbers from 1 to 7
+B = 50 # number of iterations
+lss0 = matrix(0,B,10)
+for(b in 1:B){
+  xstar=NULL
+  for(i in 1:n){
+    xstar = rbind(xstar, sample(m))
+  }
+  lss0[b,1] = log(sum(diag(var(xstar)))*(n-1))
+  for(k in 2:10){
+    kms = kmeans(xstar, centers=k, nstart=10)
+    lss0[b,k] = log(sum(kms$withinss))
+  }
+}
+
+plot(1:10, lss, type="l", col="red", xlab="k", 
+     ylab="log(Within SS)");
+for(b in 1:B){
+      points(1:10, lss0[b,], type="l", col=8)
+}
+```
+
+Step 3. Gap curve. Based on the 1se rule, the optimal K = 2.
+
+```{r}
+lss0m = apply(lss0, 2, mean);
+lss0sd = sqrt(apply(lss0, 2, var))*sqrt(1+1/B);
+diff = lss0m-lss;
+matplot(1:10, cbind(diff, diff+lss0sd, diff-lss0sd), type="l",
+        xlab="k", ylab="Gap")
+points(1:10, diff);
+points(1:10, diff-lss0sd, pch="+", col="green");
+```
+
+## Silhouette Plots
+
+```{r}
+sil2=silhouette(km2$cluster,D);
+sil3=silhouette(km3$cluster,D);
+par(mfrow=c(1,2))
+plot(sil2)
+plot(sil3)
+```
+
+Compute and plot average silhouette over a range of K values.
+
+```{r}
+par(mfrow=c(1,1))
+k.max = 10
+sil = rep(0, k.max)
+
+# Compute the average silhouette width for 
+# k = 2 to k = 15
+for(i in 2:k.max){
+  tmp = kmeans(sportsranks, centers = i, nstart = 10)
+  ss <- silhouette(tmp$cluster, dist(sportsranks))
+  sil[i] <- mean(ss[, 3])
+}
+
+# Plot the  average silhouette width
+plot(1:k.max, sil, type = "b", pch = 19, 
+     frame = FALSE, xlab = "Number of clusters k")
+abline(v = which.max(sil), lty = 2)
+```
+
+## Prediction Strength
+
+```{r}
+library(fpc)
+ps = prediction.strength(sportsranks, Gmax=10,
+                          clustermethod=kmeansCBI)
+```
+
+```{r}
+plot(1:10, ps$mean.pred, type='b', ylim=c(0,1), 
+     xlab='Number of clusters', ylab='Prediction strength')
+abline(h=ps$cutoff, col="red", lty=2, lwd=2)
+```
+
+## PAM
+
+```{r}
+par(mfrow=c(2,1))
+pam2=pam(sportsranks, k=2);
+plot(pam2)
+```
+
+```{r}
+par(mfrow=c(2,1))
+pam3=pam(sportsranks, k=3);
+plot(pam3)
+```
+
+```{r}
+par(mfrow=c(1,2));
+plot(Xmds[,1], Xmds[,2], type="n");
+points(Xmds[,1], Xmds[,2], pch=pam2$clustering, col=pam2$clustering);
+title("MDS plot for K=2")
+plot(Xmds[,1], Xmds[,2], type="n");
+points(Xmds[,1], Xmds[,2], pch=pam3$clustering, col=pam3$clustering);
+title("MDS plot for K=3")
+```
+
+```{r}
+# compare with Kmeans
+table(pam2$clustering, km2$cluster)
+```
+
+```{r}
+table(pam3$clustering, km3$cluster)
+```
+
+## Hierarchical Clustering (bottom-up)
+
+```{r}
+par(mfrow=c(1,1))
+plot(hclust(dist(sportsranks)), xlab="Complete Linkage", sub="")
+```
+
+```{r}
+plot(hclust(dist(sportsranks), method="single"), xlab="Single Linkage", sub="")
+```
+
+```{r}
+plot(hclust(dist(sportsranks), method="average"), xlab="Average Linkage", sub="")
+```
+
+```{r}
+clusters = hclust(dist(sportsranks), method="average")
+clusterCut = cutree(clusters, 3)
+table(clusterCut)
+```
+
+Check how hclust results differ from the ones from K-means.
+
+```{r}
+table(cutree(clusters, 2), km2$cluster)
+```
+
+```{r}
+table(cutree(clusters, 3), km3$cluster)
+```
+
+```{r}
+clusters = hclust(dist(sportsranks))
+table(cutree(clusters, 2), km2$cluster)
+```
+
+```{r}
+table(cutree(clusters, 3), km3$cluster)
+```
+
+K-means and VQ-compression
+
+```{r}
+X = read.table("image.txt"); 
+X = as.matrix(X); 
+X = t(X[270:1,]); 
+image(X, col=gray((0:128)/128));
+```
+
+```{r}
+# divide image into 6x6 patches
+# save the patches (36x1 vector) into data matrix Z
+p = 36
+Z = NULL 
+n = (270*360)/36
+for(i in 1:(360/6))
+    for(j in 1:(270/6)){
+        k=6*(i-1); l=6*(j-1);
+        Z=rbind(Z,as.vector(X[(k+1):(k+6), (l+1):(l+6)]));
+        }
+dim(Z)  # 2700x36 
+```
+
+```{r}
+# run k-means with K=40 centers
+mykm = kmeans(Z, centers=40, nstart=10)
+
+# Use the 40 patches to replace 2700 patches in the original image
+# The new image uses only 40 disctive patches
+newX = matrix(0,360,270)
+m = 0
+for(i in 1:(360/6))
+    for(j in 1:(270/6)){
+        k = 6*(i-1)
+        l = 6*(j-1)
+        m = m+1;
+        tmp = mykm$center[mykm$cluster[m],]
+        newX[(k+1):(k+6), (l+1):(l+6)] = matrix(tmp,6,6);
+    }
+image(newX, col=gray((0:128)/128))
+```
 
 
 
