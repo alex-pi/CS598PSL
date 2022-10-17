@@ -159,7 +159,7 @@ ptml <- proc.time()
 lasso.out = cv.glmnet(X, Y, alpha = 1) 
 sel.vars = predict(lasso.out, type="nonzero", 
                    s = lasso.out$lambda.min)$s1
-
+print(colnames(X)[sel.vars])
 ridge.out = cv.glmnet(as.matrix(X[, sel.vars]), 
                    Y, alpha = 0)
 print(paste("Lasso time: ", (proc.time() - ptml)[['elapsed']], sep = ''))

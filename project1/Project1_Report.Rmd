@@ -21,20 +21,20 @@ knitr::opts_chunk$set(echo=FALSE)
 
 ### Data set
 
-- TITLE: Ames Iowa: Alternative to the Boston Housing Data Sey.
+- TITLE: Ames Iowa: Alternative to the Boston Housing Data Set.
 - SIZE: 2930 observations, 82 variables
 
 Ames_data.csv contains information from the Ames Assessor’s Office used in computing assessed values for individual residential properties sold in Ames, IA from 2006 to 2010.
 
-The first column is “PID”, the Parcel identification number;
-The last column is the response variable, Sale_Price;
+The first column is `PID`, the Parcel identification number;
+The last column is the response variable, `Sale_Price`;
 The remaining 81 columns are explanatory variables describing various aspects of residential homes.
 
 ### Goal
 
 The goal is to predict the price of a home (in log scale) with those explanatory variables. We built TWO prediction models:
 
-- Variable selection with Lasso followed by Ridge Regression with those variables.
+- Variable selection with Lasso followed by Ridge Regression using those variables.
 - Boosting tree.
 
 Both models are tested on 10 predefined splits. For the first 5 splits the benchmark to beat is `0.125` and for the remaining 5 is `0.135`.
@@ -43,7 +43,7 @@ Both models are tested on 10 predefined splits. For the first 5 splits the bench
 
 For both types of models the data was processed as follows:
 
-1. Removed predictors which 96% or more of it's values is the same. Example:
+1. Removed predictors which 96% or more of its values are the same. Example:
 
 ```{r}
 df <- read.csv("Ames_data.csv")
@@ -53,14 +53,16 @@ df <- df[, -1]
 df$Sale_Price = log(df$Sale_Price)
 
 counts = as.data.frame(table(df[, 'Heating']))
-counts$percentage = counts$Freq / 2930 *100
+counts$percentage = counts$Freq / 2930 * 100
 paste("###", "Heating", "###")
 counts
 ```
 
-2. For continuous predictors applied winsorization at quantile cut of 95%.
+In the code the function `drop_irrelevant` is used for this step.
 
-For example, the distribution for `Lot_Area` shows most values being under ~2000.
+2. For continuous predictors we applied a `winsorization` function at quantile cut of 95%. 
+
+For example, the distribution for `Lot_Area` shows most values being under ~15000 sq. ft.
 
 ```{r}
 plot(df$Lot_Area)
@@ -94,11 +96,30 @@ mylevels
 col.names
 ```
 
+`expand_factors` function is used for this step.
+
 4. For missing values, only `Garage_Yr_Blt` had `NA` values which we set to `0`.
 
-5. Based on the correlation of some continuous predictors with `Sale_Price` I tried non-linear transformations without almost any performance improvement. So those were removed from the final version.
+5. Based on the correlation of some continuous predictors with `Sale_Price` we tried non-linear transformations without almost any performance improvement. So those were removed from the final version.
 
 6. Although originally the pre-processing diverged for the 2 models, as testing progressed, both ended up using the same pre-processed data.
+
+## Implementation
+
+### Models
+
+For the first model we used `gmlet` with $alpha=1$ (Lasso), to perform variable selection. Then we used `ridge` regression using those variables.
+
+In the second model we got the best results with `boosting`, specifically used `R` implementation `xgboost`.
+
+### Transformation of the test data.
+
+Since the test data might have categorical values not present during the training phase, we remove them before predicting. In other words, we conciliate the predictors in the test data with those observed in the training set.
+
+The functions used for this are:
+
+- `order_predictors`
+- `conciliate_predictors`
 
 ## Results
 

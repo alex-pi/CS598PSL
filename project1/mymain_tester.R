@@ -49,8 +49,8 @@ for (j in 1:10) {
   print(paste("###### Test on split ", j, ", benchmark ", benchmk, " #####"))
   
   ptm <- proc.time()
-  #source("mymain.R")
-  source("ap41_mymain_10am.R")
+  source("mymain.R")
+  #source("ap41_mymain_10am.R")
   sprintf(fmt = "\nTotal execution time: (%.2f seconds)\n", 
           (proc.time() - ptm)[['elapsed']]) %>% cat()
   

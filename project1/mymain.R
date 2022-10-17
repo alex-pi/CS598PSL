@@ -23,9 +23,9 @@ winsorization = function(df, quantile_cut = 0.95) {
                    "Wood_Deck_SF", "Open_Porch_SF", 
                    "Enclosed_Porch", 
                    "Screen_Porch"
-                   )
+  )
   
-  for(var in winsor.vars){
+  for(var in winsor.vars) {
     tmp <- df[, var]
     myquan <- quantile(tmp, probs = quantile_cut, na.rm = TRUE)
     tmp[tmp > myquan] <- myquan
@@ -152,22 +152,18 @@ train = cbind(train.x, train.y)
 X = data.matrix(train.x)  
 Y = train$Sale_Price
 
-ptml <- proc.time()
 lasso.out = cv.glmnet(X, Y, alpha = 1) 
 sel.vars = predict(lasso.out, type="nonzero", 
                    s = lasso.out$lambda.min)$s1
 
 ridge.out = cv.glmnet(as.matrix(X[, sel.vars]), 
-                   Y, alpha = 0)
-print(paste("Lasso time: ", (proc.time() - ptml)[['elapsed']], sep = ''))
+                      Y, alpha = 0)
 
-ptmb <- proc.time()
 xgb.model <- xgboost(data = X, 
                      label = Y, max_depth = 6,
                      eta = 0.05, nrounds = 5000,
                      subsample = 0.5,
                      verbose = FALSE)
-print(paste("Boosting time: ", (proc.time() - ptmb)[['elapsed']], sep = ''))
 
 ###########################################
 # Step 2: Preprocess test data
