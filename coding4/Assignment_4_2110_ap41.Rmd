@@ -1,0 +1,260 @@
+---
+title: "Coding 4 - PSL 598, Fall 2022"
+author: "Alejandro Pimentel (netID ap41,UIN 659282110)"
+date: ''
+output:
+  html_document: 
+    theme: readable
+    toc: yes
+    toc_float: TRUE
+    code_folding: show
+    code_download: true
+  pdf_document: default
+urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
+---
+
+> Implement the EM algorithm for a $p$-dimensional Gaussian mixture model with $G$ components:
+
+$$
+p(x \mid p_{1:G}, \mu_{1:G}, \Sigma) = \sum_{k=1}^G p_k \cdot N(x; \mu_k, \Sigma).
+$$
+
+## Prepare your function
+
+You should write a function to perform the E-step, a function to perform the M-step, and then iteratively call these two functions in `myEM`. 
+
+You also need to prepare
+a function to evaluate the loglikelihood; call that function after you finish the EM iterations. 
+
+
+```{r}
+Estep <- function(data, G, para){
+  # Your Code
+  # Return the n-by-G probability matrix
+  X = data
+  A = t(X)
+  p = dim(X)[2]
+  n = nrow(X)
+  r_nG = matrix(0, n, G)
+  inv_S = solve(para$Sigma)
+  det_S = det(para$Sigma)
+  
+  for (k in 1:G) {
+    A_mu_diff = A - para$mean[,k]
+    # What I think is the density for component k
+    g_den = exp(-1/2 * colSums((inv_S %*% A_mu_diff) * A_mu_diff)) / sqrt((2*pi)^p * det_S)
+    r_n = para$prob[k] * g_den
+    r_nG[,k]= r_n
+  }
+  
+  # Normalize
+  Z = r_nG / rowSums(r_nG)  
+  return(Z)
+}
+
+Mstep <- function(data, G, para, post.prob){ 
+  # Your Code
+  # Return the updated parameters
+  para.new <- list(prob = NULL, 
+                   mean = NULL, 
+                   Sigma = NULL, 
+                   loglik = NULL)
+  
+  X = as.matrix(data)
+  A = t(X)
+  n = nrow(X)
+  p = dim(X)[2]
+  
+  # new prob
+  para.new$prob = apply(post.prob, 2, mean)  
+  
+  # new mu
+  norm_w = colSums(post.prob)  
+  para.new$mean = t(t(A %*% post.prob) / norm_w)
+  
+  # new Sigma
+  c = matrix(0, p, p)
+  for (k in 1:G) {
+    # R works column by column, this is easier with python
+    X_ = t(A - para.new$mean[,k])
+    # my brain does not understand this diagonal trick
+    c =  c + (t(X_) %*% diag(post.prob[,k]) %*% X_)
+  }
+  
+  para.new$Sigma = c / n
+  
+  return(para.new)  
+}
+
+loglik <- function(data, G, para){
+	# compute loglikelihood
+  X = data
+  A = t(X)
+  p = dim(X)[2]
+  inv_S = solve(para$Sigma)
+  det_S = det(para$Sigma)
+  loglikeli = 0
+  
+  for (i in 1:n) {
+    logli_k = 0
+    for (k in 1:G) {
+      a = as.matrix(X[i, ] - para$mean[,k])
+      b = exp(a %*% inv_S %*% t(a) / -2) / sqrt((2*pi)^p * det_S)
+      logli_k = logli_k + (para$prob[k]  * b) 
+    }
+    loglikeli = loglikeli + log(logli_k)
+  }
+  
+  return(loglikeli)
+}
+
+myEM <- function(data, itmax, G, para){
+  # itmax: number of of iterations
+  # G:     number of components
+  # para:  list of (prob, mean, Sigma, loglik)
+  
+  for(t in 1:itmax){
+    post.prob <- Estep(data, G, para)
+    para <- Mstep(data, G, para, post.prob)
+  }
+  
+  # update para$loglik
+  para$loglik = loglik(data, G, para)
+  
+  return(para)
+}
+```
+
+
+
+## Test your function
+
+
+Test your function on the `faithful` data with $G = 2$ and $G = 3$ with **20** iterations (i.e., `itmax = 20`). The mixture model described above corresponds to `modelName = "EEE"` in `mclust` (you do not need to know why).
+
+
+
+Set the number of printing digits to be eight. The result from your function should agree with the result from `mclust`, up to the speciofied precision level. 
+
+```{r}
+options(digits=8)
+options()$digits
+```
+
+
+### Load data
+
+Load the `faithful` data from R package `mclust`.
+```{r}
+library(mclust)
+dim(faithful)
+head(faithful)
+```
+
+
+### Two clusters
+
+Compare the result returned by `myEM` and the one returned by the EM algorithm in `mclust` after 20 iterations.
+
+
+We **initialize** parameters by first randomly assigning the $n$ samples into two groups and then running one iteration of the built-in M-step. 
+
+```{r}
+n <- nrow(faithful)
+G <- 2
+uin_4 = 2110
+set.seed(uin_4)
+gID <- sample(1:G, n, replace = TRUE)
+Z <- matrix(0, n, G)
+for(k in 1:G)
+  Z[gID == k, k] <- 1 
+ini0 <- mstep(modelName="EEE", faithful , Z)$parameters
+```
+
+Here are the initial values we use for (prob, mean, Sigma).
+
+```{r}
+para0 <- list(prob = ini0$pro, 
+              mean = ini0$mean, 
+              Sigma = ini0$variance$Sigma, 
+              loglik = NULL)
+```
+
+
+* Output from `myEM`
+
+```{r}
+myEM(data=faithful, itmax=20, G=G, para=para0)
+```
+
+* Output from `mclust`
+```{r}
+Rout <- em(modelName = "EEE", data = faithful,
+           control = emControl(eps=0, tol=0, itmax = 20), 
+           parameters = ini0)
+list(prob = Rout$para$pro, mean = Rout$para$mean, 
+     Sigma = Rout$para$variance$Sigma, 
+     loglik = Rout$loglik)
+```
+
+
+### Three clusters
+
+Similarly, set $G=3$, then compare the result returned by `myEM` and the one returned by the em algorithm from `mclust` after 20 iterations.
+
+## Derivation
+
+Partial results for the required expressions are given below. 
+
+1. Expression of the marginal (or the so-called incomplete) likelihood function  or its log, which is the objective function we aim to maximize.
+
+
+$$
+\begin{aligned}
+& \prod_{i=1}^n  p(x_i \mid p_{1:G}, \mu_{1:G}, \Sigma) \\
+= & \prod_{i=1}^n  \big[   p_1 N(x_i; \mu_1, \Sigma) + \cdots + p_G N(x_i; \mu_G, \Sigma) \big ]\\
+= & \prod_{i=1}^n  \Big [ p_1  \frac{\exp  ( - \frac{1}{2} (x- \mu_1)^t \Sigma^{-1} (x - \mu_1)  )}{\sqrt{(2 \pi)^p | \Sigma| }}
+ + \cdots + p_G \frac{\exp  ( - \frac{1}{2} (x- \mu_G)^t \Sigma^{-1} (x - \mu_G)  )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ]
+\end{aligned}
+$$
+where $|\Sigma|$ denotes the determinant of matrix $\Sigma$.
+
+2. Expression of the complete likelihood function $\sum_{i=1}^n  p(x_i, Z_i \mid p_{1:G}, \mu_{1:G}, \Sigma)$ or its log, which is the function we work with in the EM algorithm.
+
+$$
+\begin{aligned}
+& \prod_{i=1}^n  p(x_i, Z_i \mid p_{1:G}, \mu_{1:G}, \Sigma) \\
+= & \prod_{i=1}^n \prod_{k=1}^G   \Big [ p_k  \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ]^{\mathbb{1}_{\{Z_i = k \}}}
+\end{aligned}
+$$
+
+3. Expression of the distribution of $Z_i$ at the E-step. 
+
+    Given data and the current parameter value$(p_{1:G}^{(0)}, \mu_{1:G}^{(0)}, \Sigma^{(0)})$, $Z_i$ follows  a discrete distribute taking values from $1$ to $G$ with probabilities
+$$
+\begin{aligned}
+p_{ik} := & \mathbb{P}(Z_i = k \mid x_i, p_{1:G}^{(0)}, \mu_{1:G}^{(0)}, \Sigma^{(0)}) \\
+= & \text{ your expression}
+\end{aligned}
+$$
+
+4. Expression of the objective function you aim to maximize (or minimize) at the M-step.
+
+    At the M-step, we optimize the following objective function (where the expectation is taken over $Z_1, \dots, Z_n$ with respect to the probabilities computed at step 3): 
+    
+$$   
+\begin{aligned}
+g(p_{1:G}, \mu_{1:G}, \Sigma) = & \mathbb{E} \log \prod_{i=1}^n  p(x_i, Z_i \mid p_{1:G}, \mu_{1:G}, \Sigma) \\
+= & \mathbb{E} \sum_{i=1}^n \sum_{k=1}^G  \mathbb{1}_{\{Z_i = k \}} \log  \Big [ p_k  \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ] \\
+= & \sum_{i=1}^n \sum_{k=1}^G  p_{ik}  \log  \Big [ p_k  \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ]
+
+\end{aligned}
+$$
+
+where the last step is due to the fact that $\mathbb{E} [ \mathbb{1}_{\{Z_i = k \}}] = \mathbb{P}(Z_i = k) = p_{ik}.$
+
+5. Derivation and the updating formulas for $p_{1:G}, \mu_{1:G}, \Sigma$ at the M-step.
+
+
