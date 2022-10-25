@@ -15,6 +15,8 @@ editor_options:
   chunk_output_type: console
 ---
 
+# PART I
+
 > Implement the EM algorithm for a $p$-dimensional Gaussian mixture model with $G$ components:
 
 $$
@@ -140,7 +142,6 @@ Set the number of printing digits to be eight. The result from your function sho
 
 ```{r}
 options(digits=8)
-options()$digits
 ```
 
 
@@ -204,6 +205,43 @@ list(prob = Rout$para$pro, mean = Rout$para$mean,
 
 Similarly, set $G=3$, then compare the result returned by `myEM` and the one returned by the em algorithm from `mclust` after 20 iterations.
 
+```{r}
+n <- nrow(faithful)
+G <- 3
+uin_4 = 2110
+set.seed(uin_4)
+gID <- sample(1:G, n, replace = TRUE)
+Z <- matrix(0, n, G)
+for(k in 1:G)
+  Z[gID == k, k] <- 1 
+ini0 <- mstep(modelName="EEE", faithful , Z)$parameters
+```
+
+Here are the initial values we use for (prob, mean, Sigma).
+
+```{r}
+para0 <- list(prob = ini0$pro, 
+              mean = ini0$mean, 
+              Sigma = ini0$variance$Sigma, 
+              loglik = NULL)
+```
+
+* Output from `myEM`
+
+```{r}
+myEM(data=faithful, itmax=20, G=G, para=para0)
+```
+
+* Output from `mclust`
+```{r}
+Rout <- em(modelName = "EEE", data = faithful,
+           control = emControl(eps=0, tol=0, itmax = 20), 
+           parameters = ini0)
+list(prob = Rout$para$pro, mean = Rout$para$mean, 
+     Sigma = Rout$para$variance$Sigma, 
+     loglik = Rout$loglik)
+```
+
 ## Derivation
 
 Partial results for the required expressions are given below. 
@@ -257,4 +295,286 @@ where the last step is due to the fact that $\mathbb{E} [ \mathbb{1}_{\{Z_i = k 
 
 5. Derivation and the updating formulas for $p_{1:G}, \mu_{1:G}, \Sigma$ at the M-step.
 
+# PART II
+
+## The Baum-Welch  algorihtm
+
+The Baum-Welch Algorithm is the EM algorithm for HMM. You should prepare a function `BW.onestep` to perform the E-step and M-step, and then iteratively call that function in `myBW`.
+
+**Note that We do not update w.**
+
+```{r}
+myBW = function(x, para, n.iter = 100){
+  # Input:
+  # x: T-by-1 observation sequence
+  # para: initial parameter value
+  # Output updated para value (A and B; we do not update w)
+  
+  for(i in 1:n.iter){
+    para = BW.onestep(x, para)
+  }
+  return(para)
+}
+```
+
+Your function `BW.onestep`, in which we operate the E-step and M-step for one iteration, should look as follows. 
+
+```{r}
+BW.onestep = function(x, para){
+  # Input: 
+  # x: T-by-1 observation sequence
+  # para: mx, mz, and current para values for
+  #    A: initial estimate for mz-by-mz transition matrix
+  #    B: initial estimate for mz-by-mx emission matrix
+  #    w: initial estimate for mz-by-1 initial distribution over Z_1
+  # Output the updated parameters after one iteration
+  # We DO NOT update the initial distribution w
+  
+  T = length(x)
+  mz = para$mz
+  mx = para$mx
+  A = para$A
+  B = para$B
+  w = para$w
+  alp = log(forward.prob(x, para))
+  beta = log(backward.prob(x, para))
+  
+  myGamma = array(0, dim=c(mz, mz, T-1))
+  #######################################
+  ## YOUR CODE: 
+  ## Compute gamma_t(i,j) P(Z[t] = i, Z[t+1]=j), 
+  ## for t=1:T-1, i=1:mz, j=1:mz, 
+  ## which are stored in an array, myGamma
+  #######################################
+  
+  for(t in 1:(T-1)) {
+    for(i in 1:mz) {
+      for(j in 1:mz) {
+        myGamma[i, j, t] = alp[t, i] + log(A[i, j]) + log(B[j, x[t + 1]]) + beta[t + 1, j]
+      }
+    }
+  } 
+
+  # M-step for parameter A
+  #######################################
+  ## YOUR CODE: 
+  ## A = ....
+  #######################################
+  
+  newA = matrix(0, mz, mz)
+  
+  lastLogProb = alp[T, 1]
+  for (i in 2:mz) {
+    lastLogProb = alp[T, i] + log(1 + exp(lastLogProb - alp[T, i]))
+  }
+  
+  newA = matrix(0, mz, mz)
+  for (i in 1:mz) {
+    for (j in 1:mz) {
+      temp = myGamma[i, j, 1]
+      for (t in 2:(T - 1)) {
+        temp2 = myGamma[i, j, t]
+        if (temp2 > -Inf) {
+          temp = temp2 + log(1 + exp(temp - temp2))
+        }
+      }
+      newA[i, j] = exp(temp - lastLogProb)
+    }
+  }
+  
+  # Convert to probability vectors for each Zi
+  newA = newA / rowSums(newA)  
+  
+  # M-step for parameter B
+  #######################################
+  ## YOUR CODE: 
+  ## B = ....
+  #######################################
+
+  newB = matrix(0, mz, mx)
+  for (i in 1:mz) {
+    for (l in 1:mx) {
+      temp = -Inf
+      for (t in 1:T) {
+        if (l == x[t]) {
+          j = alp[t, i] + beta[t, i]
+          if (j > -Inf) {
+            temp = j + log(1 + exp(temp - j))
+          }
+        }
+      }
+      newB[i, l] = exp(temp - lastLogProb)
+    }
+  }
+  
+  newB = newB / rowSums(newB)
+  
+  para$A = newA
+  para$B = newB
+  return(para)
+}
+```
+
+You can compute the forward and backward probabilities using the following functions.
+
+```{r}
+forward.prob = function(x, para){
+  # Output the forward probability matrix alp 
+  # alp: T by mz, (t, i) entry = P(x_{1:t}, Z_t = i)
+  T = length(x)
+  mz = para$mz
+  A = para$A
+  B = para$B
+  w = para$w
+  alp = matrix(0, T, mz)
+  
+  # fill in the first row of alp
+  alp[1, ] = w * B[, x[1]]
+  # Recursively compute the remaining rows of alp
+  for(t in 2:T){
+    tmp = alp[t-1, ] %*% A
+    alp[t, ] = tmp * B[, x[t]]
+    }
+  return(alp)
+}
+
+backward.prob = function(x, para){
+  # Output the backward probability matrix beta
+  # beta: T by mz, (t, i) entry = P(x_{1:t}, Z_t = i)
+  T = length(x)
+  mz = para$mz
+  A = para$A
+  B = para$B
+  w = para$w
+  beta = matrix(1, T, mz)
+
+  # The last row of beta is all 1.
+  # Recursively compute the previous rows of beta
+  for(t in (T-1):1){
+    tmp = as.matrix(beta[t+1, ] * B[, x[t+1]])  # make tmp a column vector
+    beta[t, ] = t(A %*% tmp)
+    }
+  return(beta)
+}
+```
+
+## The Viterbi algorihtm
+
+The Viterbi algorihtm returns the most probable latent sequence given the data and the MLE of parameters. 
+
+```{r}
+myViterbi = function(x, para){
+  # Output: most likely sequence of Z (T-by-1)
+  T = length(x)
+  mz = para$mz
+  A = para$A
+  B = para$B
+  w = para$w
+  log.A = log(A)
+  log.w = log(w)
+  log.B = log(B)
+  
+  # Compute delta (in log-scale)
+  delta = matrix(0, T, mz) 
+  # fill in the first row of delta
+  delta[1, ] = log.w + log.B[, x[1]]
+  
+  #######################################
+  ## YOUR CODE: 
+  ## Recursively compute the remaining rows of delta
+  #######################################
+
+  for (t in 2:T) {
+    for (i in 1:mz) {
+      delta[t, i] = log.B[i, x[t]] + max(delta[t - 1, ] + log.A[, i])
+    }
+  }
+  
+  # Compute the most prob sequence Z
+  Z = rep(0, T)
+  # start with the last entry of Z
+  Z[T] = which.max(delta[T, ])
+  
+  #######################################
+  ## YOUR CODE: 
+  ## Recursively compute the remaining entries of Z
+  #######################################
+
+  for (t in (T - 1):1) {
+    Z[t] = which.max(delta[t, ] + log.A[, Z[t + 1]] )
+  }
+  
+  return(Z)
+}
+```
+
+## Test your function
+
+### Baum-Welch results
+Try your code on the data provided on Campuswire. You can (i) use the initial values specified below or (ii) use your own initial values. For the latter, remember to set the seed as the last four digits of your UIN. 
+
+```{r}
+data = scan("coding4_part2_data.txt")
+
+mz = 2
+mx = 3
+ini.w = rep(1, mz)
+ini.w = ini.w / sum(ini.w)
+ini.A = matrix(1, 2, 2)
+ini.A = ini.A / rowSums(ini.A)
+ini.B = matrix(1:6, 2, 3)
+ini.B = ini.B / rowSums(ini.B)
+ini.para = list(mz = 2, mx = 3, w = ini.w,
+                A = ini.A, B = ini.B)
+
+myout = myBW(data, ini.para, n.iter = 100)
+
+
+# Calling library HMM
+library(HMM)
+hmm0 =initHMM(c("A", "B"), c(1, 2, 3),
+              startProbs = ini.w,
+              transProbs = ini.A, 
+              emissionProbs = ini.B)
+Rout = baumWelch(hmm0, data, maxIterations=100, delta=1E-9, pseudoCount=0)
+
+```
+
+```{r}
+options(digits=8)
+```
+
+- Compare estimates for transition prob matrix A
+```{r}
+myout$A
+Rout$hmm$transProbs
+```
+
+- Compare estimates for emission prob matrix B
+```{r}
+myout$B
+Rout$hmm$emissionProbs
+```
+
+### Viterbi results
+
+```{r}
+
+# Using output  from library as per instructions to reduce risk of double penalization.
+para = list(mz = mz, mx = mx, w = ini.w,
+            A = Rout$hmm$transProbs, B = Rout$hmm$emissionProbs)
+
+myout.Z = myViterbi(data, para)
+myout.Z[myout.Z==1] = 'A'
+myout.Z[myout.Z==2] = 'B'
+
+# Calling library
+Rout.Z = viterbi(Rout$hmm, data)
+```
+
+- Compare the most probable Z sequence.
+```{r}
+cbind(Rout.Z, myout.Z)[c(1:10, 180:200), ]
+sum(Rout.Z != myout.Z)
+```
 

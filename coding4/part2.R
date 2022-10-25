@@ -25,8 +25,6 @@ ini.B = ini.B / rowSums(ini.B)
 ini.para = list(mz = 2, mx = 3, w = ini.w,
                 A = ini.A, B = ini.B)
 
-myout = myBW(data, ini.para, n.iter = 100)
-
 forward.prob = function(x, para){
   # Output the forward probability matrix alp 
   # alp: T by mz, (t, i) entry = P(x_{1:t}, Z_t = i)
@@ -85,7 +83,8 @@ for(t in 1:(T-1)) {
   for(i in 1:mz) {
     for(j in 1:mz) {
       logs_ = log(c(alp[t, i], A[i, j], B[j, x[t+1]], beta[t+1, j]))
-      myGamma[i, j, t] = exp(sum(logs_))
+      #myGamma[i, j, t] = exp(sum(logs_))
+      myGamma[i, j, t] = sum(logs_)
     }
   }
 }
@@ -96,6 +95,17 @@ newA = matrix(0, mz, mz)
 for(t in 1:(T-1)) {
   newA = newA + myGamma[,,t]
 }
+
+for (i in 1:mz) {
+  for (j in 1:mz) {
+    temp = myGamma[i, j, 1]
+    for (t in 1:(T - 1)) {
+      temp2 = myGamma[i, j, t]
+      newA[i, j] = newA[i, j] + temp2
+    }
+  }
+} 
+
 # Convert to probability vectors for each Zi
 newA = newA / rowSums(newA)
 
@@ -132,4 +142,14 @@ Rout$hmm$transProbs
 
 Rout$hmm$emissionProbs
 
-
+f = forward(hmm0, x)
+b = backward(hmm0, x)
+probObservations = f[1, length(x)]
+for (i in 2:length(hmm0$States)) {
+  j = f[i, length(x)]
+  if (j > -Inf) {
+    probObservations = j + log(1 + exp(probObservations - 
+                                         j))
+  }
+}
+alp

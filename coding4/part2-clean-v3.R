@@ -41,8 +41,8 @@ BW.onestep = function(x, para) {
   A = para$A
   B = para$B
   w = para$w
-  alp = forward.prob(x, para)
-  beta = backward.prob(x, para)
+  alp = log(forward.prob(x, para))
+  beta = log(backward.prob(x, para))
   
   myGamma = array(0, dim=c(mz, mz, T-1))
   #######################################
@@ -51,16 +51,15 @@ BW.onestep = function(x, para) {
   ## for t=1:T-1, i=1:mz, j=1:mz, 
   ## which are stored in an array, myGamma
   #######################################
+  
   for(t in 1:(T-1)) {
     for(i in 1:mz) {
       for(j in 1:mz) {
-        logs_ = log(c(alp[t, i], A[i, j], B[j, x[t+1]], beta[t+1, j]))
-        #myGamma[i, j, t] = exp(sum(logs_))
-        myGamma[i, j, t] = sum(logs_)
+        myGamma[i, j, t] = alp[t, i] + log(A[i, j]) + log(B[j, x[t + 1]]) + beta[t + 1, j]
       }
     }
-  }
-    
+  }  
+  
   # M-step for parameter A
   #######################################
   ## YOUR CODE: 
@@ -68,28 +67,26 @@ BW.onestep = function(x, para) {
   #######################################
   newA = matrix(0, mz, mz)
   
-  # sum all the mz by mz matrices
-  #for(t in 1:(T-1)) {
-  #  newA = newA + myGamma[,,t]
-  #}
+  probObservations = alp[T, 1]
+  for (i in 2:mz) {
+    probObservations = alp[T, i] + log(1 + exp(probObservations - 
+                                                 alp[T, i]))
+  }
   
+  newA = matrix(0, mz, mz)
   for (i in 1:mz) {
     for (j in 1:mz) {
       temp = myGamma[i, j, 1]
-      #temp = f[x, 1] + log(hmm$transProbs[x, y]) + log(hmm$emissionProbs[y, observation[1 + 1]]) + b[y, 1 + 1]
-      for (t in 1:(T - 1)) {
+      for (t in 2:(T - 1)) {
         temp2 = myGamma[i, j, t]
-        #j = f[x, i] + log(hmm$transProbs[x, y]) + log(hmm$emissionProbs[y, observation[i + 1]]) + b[y, i + 1]
-        #if (temp2 > -Inf) {
-        newA[i, j] = newA[i, j] + temp2
-          #temp = j + log(1 + exp(temp - j))
-        #}
+        if (temp2 > -Inf) {
+          temp = temp2 + log(1 + exp(temp - temp2))
+        }
       }
-      newA[i, j] = exp(newA[i, j])
-      #temp = exp(temp - probObservations)
-      #TransitionMatrix[x, y] = temp
+      newA[i, j] = exp(temp - probObservations)
     }
-  }  
+  }
+  
   # Convert to probability vectors for each Zi
   newA = newA / rowSums(newA)
   
@@ -100,17 +97,22 @@ BW.onestep = function(x, para) {
   #######################################
   
   newB = matrix(0, mz, mx)
-  
   for (i in 1:mz) {
-    for (l in 1:mx) {
-      Ts = which(x == l)
-      Ts[Ts==T]=T-1
-      newB[i,l] = sum(myGamma[i,,Ts]) 
+    for (s in 1:mx) {
+      temp = -Inf
+      for (t in 1:T) {
+        if (s == x[t]) {
+          j = alp[t, i] + beta[t, i]
+          if (j > -Inf) {
+            temp = j + log(1 + exp(temp - j))
+          }
+        }
+      }
+      newB[i, s] = exp(temp - probObservations)
     }
-    newB[i,l] = exp(newB[i,l])
   }
   
-  newB = newB / rowSums(newB)  
+  newB = newB / rowSums(newB)
   
   para$A = newA
   para$B = newB
@@ -131,7 +133,7 @@ myBW = function(x, para, n.iter = 100) {
 
 options(digits=8)
 options()$digits
-iters = 5
+iters = 100
 
 myout = myBW(data, ini.para, n.iter = iters)
 
