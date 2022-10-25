@@ -55,12 +55,11 @@ BW.onestep = function(x, para) {
     for(i in 1:mz) {
       for(j in 1:mz) {
         logs_ = log(c(alp[t, i], A[i, j], B[j, x[t+1]], beta[t+1, j]))
-        #myGamma[i, j, t] = exp(sum(logs_))
-        myGamma[i, j, t] = sum(logs_)
+        myGamma[i, j, t] = exp(sum(logs_))
       }
     }
   }
-    
+  
   # M-step for parameter A
   #######################################
   ## YOUR CODE: 
@@ -69,27 +68,9 @@ BW.onestep = function(x, para) {
   newA = matrix(0, mz, mz)
   
   # sum all the mz by mz matrices
-  #for(t in 1:(T-1)) {
-  #  newA = newA + myGamma[,,t]
-  #}
-  
-  for (i in 1:mz) {
-    for (j in 1:mz) {
-      temp = myGamma[i, j, 1]
-      #temp = f[x, 1] + log(hmm$transProbs[x, y]) + log(hmm$emissionProbs[y, observation[1 + 1]]) + b[y, 1 + 1]
-      for (t in 1:(T - 1)) {
-        temp2 = myGamma[i, j, t]
-        #j = f[x, i] + log(hmm$transProbs[x, y]) + log(hmm$emissionProbs[y, observation[i + 1]]) + b[y, i + 1]
-        #if (temp2 > -Inf) {
-        newA[i, j] = newA[i, j] + temp2
-          #temp = j + log(1 + exp(temp - j))
-        #}
-      }
-      newA[i, j] = exp(newA[i, j])
-      #temp = exp(temp - probObservations)
-      #TransitionMatrix[x, y] = temp
-    }
-  }  
+  for(t in 1:(T-1)) {
+    newA = newA + myGamma[,,t]
+  }
   # Convert to probability vectors for each Zi
   newA = newA / rowSums(newA)
   
@@ -100,14 +81,16 @@ BW.onestep = function(x, para) {
   #######################################
   
   newB = matrix(0, mz, mx)
-  
+  #i=1;l=2
   for (i in 1:mz) {
     for (l in 1:mx) {
       Ts = which(x == l)
-      Ts[Ts==T]=T-1
-      newB[i,l] = sum(myGamma[i,,Ts]) 
+      if (any(Ts==T)) {
+        newB[i,l] = sum(myGamma[,i,T-1]) 
+      }
+      Ts = Ts[Ts != T]
+      newB[i,l] = newB[i,l]+sum(myGamma[i,,Ts]) 
     }
-    newB[i,l] = exp(newB[i,l])
   }
   
   newB = newB / rowSums(newB)  
@@ -131,7 +114,7 @@ myBW = function(x, para, n.iter = 100) {
 
 options(digits=8)
 options()$digits
-iters = 5
+iters = 100
 
 myout = myBW(data, ini.para, n.iter = iters)
 

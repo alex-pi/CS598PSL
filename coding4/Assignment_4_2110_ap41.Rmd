@@ -336,8 +336,8 @@ BW.onestep = function(x, para){
   A = para$A
   B = para$B
   w = para$w
-  alp = log(forward.prob(x, para))
-  beta = log(backward.prob(x, para))
+  alp = forward.prob(x, para)
+  beta = backward.prob(x, para)
   
   myGamma = array(0, dim=c(mz, mz, T-1))
   #######################################
@@ -346,64 +346,45 @@ BW.onestep = function(x, para){
   ## for t=1:T-1, i=1:mz, j=1:mz, 
   ## which are stored in an array, myGamma
   #######################################
-  
   for(t in 1:(T-1)) {
     for(i in 1:mz) {
       for(j in 1:mz) {
-        myGamma[i, j, t] = alp[t, i] + log(A[i, j]) + log(B[j, x[t + 1]]) + beta[t + 1, j]
+        logs_ = log(c(alp[t, i], A[i, j], B[j, x[t+1]], beta[t+1, j]))
+        myGamma[i, j, t] = exp(sum(logs_))
       }
     }
-  } 
-
+  }
+  
   # M-step for parameter A
   #######################################
   ## YOUR CODE: 
   ## A = ....
   #######################################
-  
   newA = matrix(0, mz, mz)
   
-  lastLogProb = alp[T, 1]
-  for (i in 2:mz) {
-    lastLogProb = alp[T, i] + log(1 + exp(lastLogProb - alp[T, i]))
+  # sum all the mz by mz matrices
+  for(t in 1:(T-1)) {
+    newA = newA + myGamma[,,t]
   }
-  
-  newA = matrix(0, mz, mz)
-  for (i in 1:mz) {
-    for (j in 1:mz) {
-      temp = myGamma[i, j, 1]
-      for (t in 2:(T - 1)) {
-        temp2 = myGamma[i, j, t]
-        if (temp2 > -Inf) {
-          temp = temp2 + log(1 + exp(temp - temp2))
-        }
-      }
-      newA[i, j] = exp(temp - lastLogProb)
-    }
-  }
-  
   # Convert to probability vectors for each Zi
-  newA = newA / rowSums(newA)  
+  newA = newA / rowSums(newA)
   
   # M-step for parameter B
   #######################################
   ## YOUR CODE: 
   ## B = ....
   #######################################
-
+  
   newB = matrix(0, mz, mx)
+  #i=1;l=2
   for (i in 1:mz) {
     for (l in 1:mx) {
-      temp = -Inf
-      for (t in 1:T) {
-        if (l == x[t]) {
-          j = alp[t, i] + beta[t, i]
-          if (j > -Inf) {
-            temp = j + log(1 + exp(temp - j))
-          }
-        }
+      Ts = which(x == l)
+      if (any(Ts==T)) {
+        newB[i,l] = sum(myGamma[,i,T-1]) 
       }
-      newB[i, l] = exp(temp - lastLogProb)
+      Ts = Ts[Ts != T]
+      newB[i,l] = newB[i,l]+sum(myGamma[i,,Ts]) 
     }
   }
   
