@@ -17,18 +17,17 @@ editor_options:
 
 # PART I
 
-> Implement the EM algorithm for a $p$-dimensional Gaussian mixture model with $G$ components:
+Implementation of the `EM` algorithm for a $p$-dimensional Gaussian mixture model with $G$ components:
 
 $$
 p(x \mid p_{1:G}, \mu_{1:G}, \Sigma) = \sum_{k=1}^G p_k \cdot N(x; \mu_k, \Sigma).
 $$
 
-## Prepare your function
+## Function definitions
 
-You should write a function to perform the E-step, a function to perform the M-step, and then iteratively call these two functions in `myEM`. 
+Below we define a function to perform the E-step, a function to perform the M-step, and then iteratively call these two functions in `myEM`. 
 
-You also need to prepare
-a function to evaluate the loglikelihood; call that function after you finish the EM iterations. 
+We also prepare a function to evaluate the loglikelihood; which we call after the EM iterations. 
 
 
 ```{r}
@@ -131,14 +130,12 @@ myEM <- function(data, itmax, G, para){
 
 
 
-## Test your function
+## Testing the functions
 
 
-Test your function on the `faithful` data with $G = 2$ and $G = 3$ with **20** iterations (i.e., `itmax = 20`). The mixture model described above corresponds to `modelName = "EEE"` in `mclust` (you do not need to know why).
+Functions are tested on the `faithful` data with $G = 2$ and $G = 3$ with **20** iterations (i.e., `itmax = 20`). The mixture model described above corresponds to `modelName = "EEE"` in `mclust`.
 
-
-
-Set the number of printing digits to be eight. The result from your function should agree with the result from `mclust`, up to the speciofied precision level. 
+Set the number of printing digits to be eight. We expect the result from our function to agree with the result from `mclust`, up to the specified precision level. 
 
 ```{r}
 options(digits=8)
@@ -148,17 +145,13 @@ options(digits=8)
 ### Load data
 
 Load the `faithful` data from R package `mclust`.
+
 ```{r}
 library(mclust)
-dim(faithful)
-head(faithful)
 ```
 
 
-### Two clusters
-
-Compare the result returned by `myEM` and the one returned by the EM algorithm in `mclust` after 20 iterations.
-
+### Comparing with two clusters
 
 We **initialize** parameters by first randomly assigning the $n$ samples into two groups and then running one iteration of the built-in M-step. 
 
@@ -181,16 +174,19 @@ para0 <- list(prob = ini0$pro,
               mean = ini0$mean, 
               Sigma = ini0$variance$Sigma, 
               loglik = NULL)
+
+para0
 ```
 
 
-* Output from `myEM`
+* Output from `myEM` with `G=2` and `itmax=20`.  
 
 ```{r}
 myEM(data=faithful, itmax=20, G=G, para=para0)
 ```
 
-* Output from `mclust`
+* Output from `mclust` with `G=2` and `itmax=20`.
+
 ```{r}
 Rout <- em(modelName = "EEE", data = faithful,
            control = emControl(eps=0, tol=0, itmax = 20), 
@@ -201,9 +197,9 @@ list(prob = Rout$para$pro, mean = Rout$para$mean,
 ```
 
 
-### Three clusters
+### Comparing with three clusters
 
-Similarly, set $G=3$, then compare the result returned by `myEM` and the one returned by the em algorithm from `mclust` after 20 iterations.
+Similarly, we set $G=3$, then compare the result returned by `myEM` and the one returned by the em algorithm from `mclust` after 20 iterations.
 
 ```{r}
 n <- nrow(faithful)
@@ -224,15 +220,18 @@ para0 <- list(prob = ini0$pro,
               mean = ini0$mean, 
               Sigma = ini0$variance$Sigma, 
               loglik = NULL)
+
+para0
 ```
 
-* Output from `myEM`
+* Output from `myEM` with `G=3` and `itmax=20`.
 
 ```{r}
 myEM(data=faithful, itmax=20, G=G, para=para0)
 ```
 
-* Output from `mclust`
+* Output from `mclust` with `G=3` and `itmax=20`.
+
 ```{r}
 Rout <- em(modelName = "EEE", data = faithful,
            control = emControl(eps=0, tol=0, itmax = 20), 
@@ -244,9 +243,7 @@ list(prob = Rout$para$pro, mean = Rout$para$mean,
 
 ## Derivation
 
-Partial results for the required expressions are given below. 
-
-1. Expression of the marginal (or the so-called incomplete) likelihood function  or its log, which is the objective function we aim to maximize.
+1. Expression of the marginal (or the so-called incomplete) likelihood function or its log, which is the objective function we aim to maximize.
 
 
 $$
@@ -270,7 +267,8 @@ $$
 
 3. Expression of the distribution of $Z_i$ at the E-step. 
 
-    Given data and the current parameter value$(p_{1:G}^{(0)}, \mu_{1:G}^{(0)}, \Sigma^{(0)})$, $Z_i$ follows  a discrete distribute taking values from $1$ to $G$ with probabilities
+    Given data and the current parameter value$(p_{1:G}^{(0)}, \mu_{1:G}^{(0)}, \Sigma^{(0)})$, $Z_i$ follows  a discrete distribute taking values from $1$ to $G$ with probabilities.
+    
 $$
 \begin{aligned}
 p_{ik} := & \mathbb{P}(Z_i = k \mid x_i, p_{1:G}^{(0)}, \mu_{1:G}^{(0)}, \Sigma^{(0)}) \\
@@ -278,16 +276,15 @@ p_{ik} := & \mathbb{P}(Z_i = k \mid x_i, p_{1:G}^{(0)}, \mu_{1:G}^{(0)}, \Sigma^
 \end{aligned}
 $$
 
-4. Expression of the objective function you aim to maximize (or minimize) at the M-step.
+4. Expression of the objective function we aim to maximize (or minimize) at the M-step.
 
-    At the M-step, we optimize the following objective function (where the expectation is taken over $Z_1, \dots, Z_n$ with respect to the probabilities computed at step 3): 
+At the M-step, we optimize the following objective function (where the expectation is taken over $Z_1, \dots, Z_n$ with respect to the probabilities computed at step 3): 
     
 $$   
 \begin{aligned}
 g(p_{1:G}, \mu_{1:G}, \Sigma) = & \mathbb{E} \log \prod_{i=1}^n  p(x_i, Z_i \mid p_{1:G}, \mu_{1:G}, \Sigma) \\
 = & \mathbb{E} \sum_{i=1}^n \sum_{k=1}^G  \mathbb{1}_{\{Z_i = k \}} \log  \Big [ p_k  \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ] \\
 = & \sum_{i=1}^n \sum_{k=1}^G  p_{ik}  \log  \Big [ p_k  \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ]
-
 \end{aligned}
 $$
 
@@ -295,65 +292,94 @@ where the last step is due to the fact that $\mathbb{E} [ \mathbb{1}_{\{Z_i = k 
 
 5. Derivation and the updating formulas for $p_{1:G}, \mu_{1:G}, \Sigma$ at the M-step.
 
-We can rewrite the objective function as follows by re factoring and dropping some constants, namely  $\sqrt{(2 \pi)^p | \Sigma| }$.
+We can rewrite the objective function as follows by re factoring and dropping some constants, namely $\sqrt{(2 \pi)^p}$
 
-$$
+
 \begin{aligned}
-= & \sum_{i=1}^n \sum_{k=1}^G p_{ik}\log p_k + \sum_{i=1}^n \sum_{k=1}^G  p_{ik}  \log  \Big [   \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ] \\
+\sum_{i=1}^n \sum_{k=1}^G p_{ik}\log p_k + \sum_{i=1}^n \sum_{k=1}^G  p_{ik}  \log  \Big [   \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ] & \\
 
-= & \sum_{i=1}^n \sum_{k=1}^G p_{ik}\log p_k - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik} \log|\Sigma|  \Big [(x- \mu_k)^t \Sigma^{-1} (x - \mu_k) \Big ] 
+\sum_{i=1}^n \sum_{k=1}^G p_{ik}\log p_k - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik} \log|\Sigma|  \Big [(x- \mu_k)^t \Sigma^{-1} (x - \mu_k) \Big ] &
 \end{aligned}
-$$
+
+
 For $\mu_k$, we take the partial derivative of the second term.
 
-$$
+
 \begin{aligned}
-\frac{\partial }{\partial u_k} g(p_{1:G}, \mu_{1:G}, \Sigma) = & \frac{\partial }{\partial u_k} \Big  [ - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik}(x- \mu_k)^t \Sigma^{-1} (x - \mu_k) \Big ] \\
+ \frac{\partial }{\partial u_k} \Big  [ - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik}(x- \mu_k)^t \Sigma^{-1} (x - \mu_k) \Big ] \\
 
-= & - \frac{1}{2} \sum_{i=1}^n p_{ik} \frac{\partial }{\partial u_k} \Big [ \sum_{k=1}^G \mu_k^t \Sigma^{-1} \mu_k -2 x^t \Sigma^{-1} \mu_k\Big ] \\
+ - \frac{1}{2} \sum_{i=1}^n p_{ik} \frac{\partial }{\partial u_k} \Big [ \sum_{k=1}^G \mu_k^t \Sigma^{-1} \mu_k -2 x^t \Sigma^{-1} \mu_k\Big ] \\
 
-= & - \frac{1}{2} \sum_{i=1}^n p_{ik} \Big [2 \Sigma^{-1} \mu_k - 2 \Sigma^{-1} x \Big ] \\
+ - \frac{1}{2} \sum_{i=1}^n p_{ik} \Big [2 \Sigma^{-1} \mu_k - 2 \Sigma^{-1} x \Big ] \\
 
-= & \sum_{i=1}^n p_{ik} \Big [\Sigma^{-1} x - \Sigma^{-1} \mu_k \Big ]
+ \sum_{i=1}^n p_{ik} \Big [\Sigma^{-1} x - \Sigma^{-1} \mu_k \Big ]
 
 \end{aligned}
-$$
-$$
 
+
+We set the equation to 0 to find the expression that optimizes $\mu_k$.
+
+\begin{aligned}
 \sum_{i=1}^n p_{ik} \Big [\Sigma^{-1} x - \Sigma^{-1} \mu_k \Big] = 0 \\
 
 \sum_{i=1}^n p_{ik} \mu_k = \sum_{i=1}^n p_{ik} x \\
 
 \mu_k = \frac{\sum_{i=1}^n p_{ik} x}{\sum_{i=1}^n p_{ik}} \\
-
-$$
+\end{aligned}
 
 For the derivative of $\Sigma_k$ we have:
 
-$$
 \begin{aligned}
-\frac{\partial }{\partial \Sigma_k} g(p_{1:G}, \mu_{1:G}, \Sigma) = & \frac{\partial }{\partial \Sigma_k} \Big  [ - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik}  \log|\Sigma_k| (x- \mu_k)^t \Sigma_k^{-1} (x - \mu_k) \Big ] \\
+ \frac{\partial }{\partial \Sigma_k} \Big  [ - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik}  \log|\Sigma_k| (x- \mu_k)^t \Sigma_k^{-1} (x - \mu_k) \Big ] \\
 
-= & - \frac{1}{2} \sum_{i=1}^n p_{ik} \Big [\Sigma_k - (x- \mu_k)^t (x - \mu_k) \Big ]
+ - \frac{1}{2} \sum_{i=1}^n p_{ik} \Big [\Sigma_k - (x- \mu_k)^t (x - \mu_k) \Big ]
 \end{aligned}
-$$
 
-$$
+
+
+\begin{aligned}
 \sum_{i=1}^n p_{ik} \Big [\Sigma_k - (x- \mu_k)^t (x - \mu_k) \Big ] = 0 \\
 
 \Sigma_k \sum_{i=1}^n p_{ik} = \sum_{i=1}^n p_{ik} (x- \mu_k)^t (x - \mu_k) \\
 
 \Sigma_k = \frac{\sum_{i=1}^n p_{ik} (x- \mu_k)^t (x - \mu_k)}{\sum_{i'=1}^n p_{i'k}}
-$$
+\end{aligned}
+
+
+Lastly, for the derivation of the mixing proportions $p_k$ we introduced a `Langrange Multiplier` term.
+
+
+\begin{aligned}
+\frac{\partial }{\partial p_k} \Big [ \sum_{i=1}^n \sum_{k=1}^G p_{ik} \log p_k - \lambda(\sum_{k=1}^G p_k - 1)  \Big ] = & 0 \\
+
+\frac{\sum_{i=1}^n p_{ik}}{p_k} - \lambda = & 0 \\
+
+\sum_{i=1}^n p_{ik} = & \lambda {p_k} \\
+
+\sum_{i=1}^n \sum_{k=1}^G p_{ik} = & \lambda \sum_{k=1}^G {p_k} \\
+
+N = & \lambda \\
+
+\end{aligned}
+
+
+Once we know $\lambda$ for the `Langrange Multiplier` it follows that:
+
+
+\begin{aligned}
+& \frac{\sum_{i=1}^n p_{ik}}{p_k} - N = 0 \\
+
+& p_k = \frac{1}{N} \sum_{i=1}^n p_{ik}
+\end{aligned}
 
 
 # PART II
 
 ## The Baum-Welch  algorihtm
 
-The Baum-Welch Algorithm is the EM algorithm for HMM. You should prepare a function `BW.onestep` to perform the E-step and M-step, and then iteratively call that function in `myBW`.
+The Baum-Welch Algorithm is the EM algorithm for HMM. We prepare a function `BW.onestep` to perform the E-step and M-step, and then iteratively call that function in `myBW`.
 
-**Note that We do not update w.**
+**We do not update w, since R's implementation does not.**
 
 ```{r}
 myBW = function(x, para, n.iter = 100){
@@ -369,7 +395,7 @@ myBW = function(x, para, n.iter = 100){
 }
 ```
 
-Your function `BW.onestep`, in which we operate the E-step and M-step for one iteration, should look as follows. 
+`BW.onestep` function, in which we operate the E-step and M-step for one iteration. 
 
 ```{r}
 BW.onestep = function(x, para){
@@ -448,7 +474,7 @@ BW.onestep = function(x, para){
 }
 ```
 
-You can compute the forward and backward probabilities using the following functions.
+The following functions compute the forward and backward probabilities.
 
 ```{r}
 forward.prob = function(x, para){
@@ -541,10 +567,11 @@ myViterbi = function(x, para){
 }
 ```
 
-## Test your function
+## Testing the functions
 
 ### Baum-Welch results
-Try your code on the data provided on Campuswire. You can (i) use the initial values specified below or (ii) use your own initial values. For the latter, remember to set the seed as the last four digits of your UIN. 
+
+Below we initialize the parameters and use the data in `coding4_part2_data.txt` to compare our implementation with R's after `100` iterations.
 
 ```{r}
 data = scan("coding4_part2_data.txt")
@@ -577,19 +604,23 @@ Rout = baumWelch(hmm0, data, maxIterations=100, delta=1E-9, pseudoCount=0)
 options(digits=8)
 ```
 
-- Compare estimates for transition prob matrix A
+- Compare estimates for transition prob matrix A.
+
 ```{r}
 myout$A
 Rout$hmm$transProbs
 ```
 
-- Compare estimates for emission prob matrix B
+- Compare estimates for emission prob matrix B.
+
 ```{r}
 myout$B
 Rout$hmm$emissionProbs
 ```
 
 ### Viterbi results
+
+Again we compare our function `myViterbi` with R's implementation. Note that for our function we provide the `A` and `B` matrices produced by R's `baumWelch` function. This is as per the assignment instructions.
 
 ```{r}
 
@@ -606,6 +637,7 @@ Rout.Z = viterbi(Rout$hmm, data)
 ```
 
 - Compare the most probable Z sequence.
+
 ```{r}
 cbind(Rout.Z, myout.Z)[c(1:10, 180:200), ]
 sum(Rout.Z != myout.Z)
