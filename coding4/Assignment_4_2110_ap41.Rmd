@@ -274,7 +274,7 @@ $$
 $$
 \begin{aligned}
 p_{ik} := & \mathbb{P}(Z_i = k \mid x_i, p_{1:G}^{(0)}, \mu_{1:G}^{(0)}, \Sigma^{(0)}) \\
-= & \text{ your expression}
+= & \frac{p_k N(x_i; \mu_k, \Sigma_k)}{\sum_{k'=1}^G p_{k'} N(x_i; \mu_{k'}, \Sigma_{k'})} 
 \end{aligned}
 $$
 
@@ -294,6 +294,58 @@ $$
 where the last step is due to the fact that $\mathbb{E} [ \mathbb{1}_{\{Z_i = k \}}] = \mathbb{P}(Z_i = k) = p_{ik}.$
 
 5. Derivation and the updating formulas for $p_{1:G}, \mu_{1:G}, \Sigma$ at the M-step.
+
+We can rewrite the objective function as follows by re factoring and dropping some constants, namely  $\sqrt{(2 \pi)^p | \Sigma| }$.
+
+$$
+\begin{aligned}
+= & \sum_{i=1}^n \sum_{k=1}^G p_{ik}\log p_k + \sum_{i=1}^n \sum_{k=1}^G  p_{ik}  \log  \Big [   \frac{\exp  ( - \frac{1}{2} (x- \mu_k)^t \Sigma^{-1} (x - \mu_k) )}{\sqrt{(2 \pi)^p | \Sigma| }} \Big ] \\
+
+= & \sum_{i=1}^n \sum_{k=1}^G p_{ik}\log p_k - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik} \log|\Sigma|  \Big [(x- \mu_k)^t \Sigma^{-1} (x - \mu_k) \Big ] 
+\end{aligned}
+$$
+For $\mu_k$, we take the partial derivative of the second term.
+
+$$
+\begin{aligned}
+\frac{\partial }{\partial u_k} g(p_{1:G}, \mu_{1:G}, \Sigma) = & \frac{\partial }{\partial u_k} \Big  [ - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik}(x- \mu_k)^t \Sigma^{-1} (x - \mu_k) \Big ] \\
+
+= & - \frac{1}{2} \sum_{i=1}^n p_{ik} \frac{\partial }{\partial u_k} \Big [ \sum_{k=1}^G \mu_k^t \Sigma^{-1} \mu_k -2 x^t \Sigma^{-1} \mu_k\Big ] \\
+
+= & - \frac{1}{2} \sum_{i=1}^n p_{ik} \Big [2 \Sigma^{-1} \mu_k - 2 \Sigma^{-1} x \Big ] \\
+
+= & \sum_{i=1}^n p_{ik} \Big [\Sigma^{-1} x - \Sigma^{-1} \mu_k \Big ]
+
+\end{aligned}
+$$
+$$
+
+\sum_{i=1}^n p_{ik} \Big [\Sigma^{-1} x - \Sigma^{-1} \mu_k \Big] = 0 \\
+
+\sum_{i=1}^n p_{ik} \mu_k = \sum_{i=1}^n p_{ik} x \\
+
+\mu_k = \frac{\sum_{i=1}^n p_{ik} x}{\sum_{i=1}^n p_{ik}} \\
+
+$$
+
+For the derivative of $\Sigma_k$ we have:
+
+$$
+\begin{aligned}
+\frac{\partial }{\partial \Sigma_k} g(p_{1:G}, \mu_{1:G}, \Sigma) = & \frac{\partial }{\partial \Sigma_k} \Big  [ - \frac{1}{2} \sum_{i=1}^n \sum_{k=1}^G p_{ik}  \log|\Sigma_k| (x- \mu_k)^t \Sigma_k^{-1} (x - \mu_k) \Big ] \\
+
+= & - \frac{1}{2} \sum_{i=1}^n p_{ik} \Big [\Sigma_k - (x- \mu_k)^t (x - \mu_k) \Big ]
+\end{aligned}
+$$
+
+$$
+\sum_{i=1}^n p_{ik} \Big [\Sigma_k - (x- \mu_k)^t (x - \mu_k) \Big ] = 0 \\
+
+\Sigma_k \sum_{i=1}^n p_{ik} = \sum_{i=1}^n p_{ik} (x- \mu_k)^t (x - \mu_k) \\
+
+\Sigma_k = \frac{\sum_{i=1}^n p_{ik} (x- \mu_k)^t (x - \mu_k)}{\sum_{i'=1}^n p_{i'k}}
+$$
+
 
 # PART II
 
