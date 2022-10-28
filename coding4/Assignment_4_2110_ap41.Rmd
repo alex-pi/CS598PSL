@@ -32,7 +32,7 @@ We also prepare a function to evaluate the loglikelihood; which we call after th
 
 ```{r}
 Estep <- function(data, G, para){
-  # Your Code
+
   # Return the n-by-G probability matrix
   X = data
   A = t(X)
@@ -56,7 +56,7 @@ Estep <- function(data, G, para){
 }
 
 Mstep <- function(data, G, para, post.prob){ 
-  # Your Code
+
   # Return the updated parameters
   para.new <- list(prob = NULL, 
                    mean = NULL, 
@@ -379,7 +379,7 @@ Once we know $\lambda$ for the `Langrange Multiplier` it follows that:
 
 The Baum-Welch Algorithm is the EM algorithm for HMM. We prepare a function `BW.onestep` to perform the E-step and M-step, and then iteratively call that function in `myBW`.
 
-**We do not update w, since R's implementation does not.**
+**We do not update w, since R's implementation does not do it.**
 
 ```{r}
 myBW = function(x, para, n.iter = 100){
@@ -419,7 +419,6 @@ BW.onestep = function(x, para){
   
   myGamma = array(0, dim=c(mz, mz, T-1))
   #######################################
-  ## YOUR CODE: 
   ## Compute gamma_t(i,j) P(Z[t] = i, Z[t+1]=j), 
   ## for t=1:T-1, i=1:mz, j=1:mz, 
   ## which are stored in an array, myGamma
@@ -435,7 +434,6 @@ BW.onestep = function(x, para){
   
   # M-step for parameter A
   #######################################
-  ## YOUR CODE: 
   ## A = ....
   #######################################
   newA = matrix(0, mz, mz)
@@ -449,12 +447,11 @@ BW.onestep = function(x, para){
   
   # M-step for parameter B
   #######################################
-  ## YOUR CODE: 
   ## B = ....
   #######################################
   
   newB = matrix(0, mz, mx)
-  #i=1;l=2
+
   for (i in 1:mz) {
     for (l in 1:mx) {
       Ts = which(x == l)
@@ -519,7 +516,7 @@ backward.prob = function(x, para){
 
 ## The Viterbi algorihtm
 
-The Viterbi algorihtm returns the most probable latent sequence given the data and the MLE of parameters. 
+The Viterbi algorithm returns the most probable latent sequence given the data and the MLE of parameters. 
 
 ```{r}
 myViterbi = function(x, para){
@@ -539,7 +536,6 @@ myViterbi = function(x, para){
   delta[1, ] = log.w + log.B[, x[1]]
   
   #######################################
-  ## YOUR CODE: 
   ## Recursively compute the remaining rows of delta
   #######################################
 
@@ -555,7 +551,6 @@ myViterbi = function(x, para){
   Z[T] = which.max(delta[T, ])
   
   #######################################
-  ## YOUR CODE: 
   ## Recursively compute the remaining entries of Z
   #######################################
 
