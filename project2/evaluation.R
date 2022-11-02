@@ -1,13 +1,15 @@
-source("approach3.R")
+#source("approach_prophet.R")
+source("approach3_svd.R")
 
 # read in train / test dataframes
 train <- readr::read_csv('train_ini.csv')
 test <- readr::read_csv('test.csv')
-#t  = 2
+#t  = 1
 
 # wae: record weighted mean absolute error WMAE
 num_folds <- 10
 wae <- rep(0, num_folds)
+ptm <- proc.time()
 
 for (t in 1:num_folds) {
   # *** THIS IS YOUR PREDICTION FUNCTION ***
@@ -32,6 +34,9 @@ for (t in 1:num_folds) {
   # update train data and get ready to predict at (t+1)
   train <- train %>% add_row(new_train)
 }
+
+sprintf(fmt = "\nTotal execution time: (%.2f seconds)\n", 
+        (proc.time() - ptm)[['elapsed']]) %>% cat()
 
 print(wae)
 mean(wae)

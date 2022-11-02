@@ -2,8 +2,8 @@ library(lubridate)
 library(tidyverse)
 
 # read raw data and extract date column
-#train_raw <- readr::read_csv(unz('train.csv.zip', 'train.csv'))
-train_raw <- readr::read_csv('train.csv')
+train_raw <- readr::read_csv(unz('train.csv.zip', 'train.csv'))
+#train_raw <- readr::read_csv('train.csv')
 train_dates <- train_raw$Date
 
 # training data from 2010-02 to 2011-02

@@ -2,6 +2,7 @@ library(lubridate)
 library(tidyverse)
 
 mypredict = function(){
+  print(paste("######## t = ", t, "########"))
   start_date <- ymd("2011-03-01") %m+% months(2 * (t - 1))
   end_date <- ymd("2011-05-01") %m+% months(2 * (t - 1)) 
   
