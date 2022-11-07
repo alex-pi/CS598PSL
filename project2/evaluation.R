@@ -1,5 +1,6 @@
-#source("approach_prophet.R")
-source("approach3_svd.R")
+
+#source("approach3_svd.R")
+source("ap41_mymain_12pm.R")
 
 # read in train / test dataframes
 train <- readr::read_csv('train_ini.csv')
@@ -39,4 +40,4 @@ sprintf(fmt = "\nTotal execution time: (%.2f seconds)\n",
         (proc.time() - ptm)[['elapsed']]) %>% cat()
 
 print(wae)
-mean(wae)
+print(mean(wae))

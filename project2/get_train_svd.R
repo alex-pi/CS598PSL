@@ -1,4 +1,4 @@
-get_train_svd = function(train_) {
+get_train_svd = function(train_, num_comp = 8) {
   
   train_split = train_ %>% 
     group_split(Dept)
@@ -9,7 +9,7 @@ get_train_svd = function(train_) {
     #print(paste("######## i = ", i, "########"))
     dept_train = train_split[[i]][,1:4]
     
-    num_comp = 8
+    #num_comp = 12
     train_svd_ = dept_train %>% 
       select(Store, Dept, Date, Weekly_Sales) %>%
       spread(Date, Weekly_Sales)
