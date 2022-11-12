@@ -1,15 +1,15 @@
 library(lubridate)
 library(tidyverse)
 
-mypredict = function(){
+mypredict = function() {
+  
   print(paste("######## t =", t, "########"))
   start_date <- ymd("2011-03-01") %m+% months(2 * (t - 1))
   end_date <- ymd("2011-05-01") %m+% months(2 * (t - 1)) 
   
-  # Add the 10 optimal numbers of principal components (1 per fold t)
-  optimal_num_comp <- c( 3, 8, 11, 8, 13, 6, 11, 14, 14, 13 )
+  train$Weekly_Sales = ifelse( train$Weekly_Sales < 0, 0, train$Weekly_Sales )
   
-  train_new <- get_train_svd(train, optimal_num_comp[t])
+  train_new <- get_train_svd(train)
   
   test_current <- test %>%
     filter(Date >= start_date & Date < end_date)
@@ -100,11 +100,12 @@ get_train_svd = function(train_, num_comp = 8) {
       store_means = rowMeans(svd_matrix)
       svd_matrix = svd_matrix - store_means
       
-      z = svd(svd_matrix, nu=num_comp, nv=num_comp) # get u,d,v
-      d = diag(z$d[1:num_comp]) # diagonal matrix
-      svd_matrix = z$u %*% d %*% t(z$v) # recreate the matrix
+      z = svd(svd_matrix, nu=num_comp, nv=num_comp)
+      # diagonal matrix
+      d = diag(z$d[1:num_comp]) 
+      # recreate the matrix
+      svd_matrix = z$u %*% d %*% t(z$v) 
       svd_matrix = svd_matrix + store_means
-      #dim(svd_matrix)
       
       ## Reinsert lower rank matrix into train tibble
       train_svd_[, 3:dim(train_svd_)[2]] = svd_matrix
@@ -114,8 +115,10 @@ get_train_svd = function(train_, num_comp = 8) {
     svd_list[[i]] = train_svd_
   }
   
+  # stack smooth matrices to form a single tibble
   train_svd = bind_rows(svd_list)
   
+  # undo the spread operation
   train_new = train_svd %>%
     gather(Date, Weekly_Sales, -Store, -Dept)
   
