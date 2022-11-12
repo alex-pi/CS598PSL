@@ -30,6 +30,6 @@ tmpfit = glmnet(x = dtm_train,
                 y = train$sentiment, 
                 alpha = 1,
                 family='binomial')
-idx = which(max(tmpfit$df[tmpfit$df < 2000]) == tmpfit$df)
+idx = which(max(tmpfit$df[tmpfit$df <= 1000]) == tmpfit$df)
 myvocab = colnames(dtm_train)[which(tmpfit$beta[, idx] != 0)]
 write(myvocab, "myvocab.txt")
