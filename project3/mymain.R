@@ -1,3 +1,5 @@
+library(text2vec)
+library(glmnet)
 
 #####################################
 # Load libraries
