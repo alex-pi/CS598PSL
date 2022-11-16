@@ -1,0 +1,33 @@
+---
+title: "LogisticReg_NonLinear"
+author: "Alejandro Pimentel"
+date: "2022-11-10"
+output: html_document
+---
+
+# Logistic Regression with Splines
+
+## Prepare the Phoneme Data
+
+```{r}
+#install.packages("ElemStatLearn")
+library(ElemStatLearn)
+library(splines)
+data(phoneme)
+
+mydata = phoneme[phoneme$g %in% c("aa", "ao"), ]
+# mydata[1, ]
+mydata[1, c(1:5, 250:258)]
+```
+
+```{r}
+X = data.matrix(mydata[, -c(257, 258)])
+Y = mydata[, 257]
+table(Y)
+```
+
+```{r}
+Y = as.numeric(Y)-1
+table(Y)
+```
+
