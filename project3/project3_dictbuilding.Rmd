@@ -1,0 +1,201 @@
+
+---
+title: "Project 3 - Dictionary Building"
+author: 
+ - Tyler Zender (netID tzender2)
+ - Matthew Lind (netID lind6)
+ - Alejandro Pimentel (netID ap41,UIN 659282110)
+date: ''
+output:
+  html_document: 
+    theme: readable
+    toc: yes
+    toc_float: TRUE
+    code_folding: show
+    code_download: true
+  pdf_document: default
+urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+# Dictionary Building
+
+## Data details
+
+The data consists of 50,000 IMDB movie reviews, where each review is labelled as positive or negative.
+
+- “id”, the identification number;
+- “sentiment”, 0 = negative and 1 = positive;
+- “score”, the 10-point score assigned by the reviewer. Scores 1-4 correspond to negative sentiment; Scores 7-10 correspond to positive sentiment. This data set contains no reviews with score 5 or 6.
+- “review”.
+
+```{r}
+list.of.packages <- c("text2vec", "glmnet", "dplyr", "wordcloud")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+```
+
+
+```{r}
+library(text2vec)
+library(glmnet)
+library(dplyr)
+#library(tm)
+library(wordcloud)
+
+train = read.table("alldata.tsv",
+                   stringsAsFactors = FALSE,
+                   header = TRUE)
+```
+
+```{r eval=FALSE, class.source = 'fold-hide'}
+# just for testing
+train = train[1:10000, ]
+```
+
+To build the dictionary we focused on ´review´ and ´sentiment´. We want a dictionary of terms that are significant for sentiment prediction. In the example below, the review has a positive sentiment.
+
+```{r}
+train[1,]$review
+train[1,]$sentiment
+```
+
+## Preprocessing.
+
+Some reviews contain undesired characters, below we remove some of them.
+
+```{r}
+train$review = gsub('<.*?>', ' ', train$review)
+#train$review = gsub("[^[:alnum:]]", " ", train$review)
+```
+
+Below we use ´text2vec´ to create a vocabulary, the function ´create_vocabulary´ uses an iterator that tokenizes words/terms and change them to lower case.
+
+´create_vocabulary´ creates 2 main statistics for each term:
+
+- term_count, number of occurrences of a term across all reviews.
+- doc_count, number of reviews a term appears into.
+
+```{r}
+it_train = itoken(train$review,
+                  preprocessor = tolower, 
+                  tokenizer = word_tokenizer)
+
+stop_words = c("i", "me", "my", "myself", 
+               "we", "our", "ours", "ourselves", 
+               "you", "your", "yours", 
+               "their", "they", "his", "her", 
+               "she", "he", "a", "an", "and",
+               "is", "was", "are", "were", 
+               "him", "himself", "has", "have", 
+               "it", "its", "the", "us")
+
+full.vocab = create_vocabulary(it_train, 
+                              stopwords = stop_words,#tm::stopwords('english'), 
+                              ngram = c(1L,4L))
+```
+
+We prune the vocabulary with the following criteria:
+
+- Terms must appear a minimum number of occurrences.
+- Limit the maximum proportion of documents any term appears in.
+- Limit the minimum proportion of documents any term appears in.
+
+```{r}
+prune.vocab = prune_vocabulary(full.vocab, term_count_min = 10,
+                             doc_proportion_max = 0.5,
+                             doc_proportion_min = 0.001)
+```
+
+The number of terms after pruning is reduced from ´r dim(full.vocab)[1]´ to 
+´r dim(prune.vocab)[1]´
+
+## Vocabulary optimization.
+
+First we need an appropriate matrix representation of the terms for each document/review.
+
+We create a Document-Term Matrix (DTM), which has the reviews as rows and as columns the terms, each position in the matrix indicates how many times the term $j$ appears in the document $i$.
+
+```{r}
+dtm_train = create_dtm(it_train, vocab_vectorizer(prune.vocab))
+```
+
+```{r}
+T_ = 50; 
+max_terms = 1000#982
+```
+
+
+The resulting DTM matrix has dimensions: ´r dim(dtm_train)´.
+
+In the code below we produced the final vocabulary which should contain ´1000´ terms or less. To achieve this we perform the following steps:
+
+1. Sample a subset of the terms in the DTM matrix.
+2. Fit a ´GLM´ model with ´Lasso´ using the ´sentiment´ variable as a binary response.
+3. Using $\lambda_{min}$ select the terms which coefficients $\hat\beta \neq 0$.
+
+We repeat the procedure ´r T_´ times keeping a count of the times each fitted model selects each term. 
+
+The goal is to increase the number of terms that are actually relevant for sentiment classification.
+
+```{r}
+
+# Initialize a data frame to keep count of term selections.
+term_sel_count = data.frame(myvocab = "", freq = 0)
+#uin_4 = 2110
+#set.seed(uin_4)
+
+for( t in 1:T_){
+  print(paste("##### t =", t))
+  
+  # randomly sample a subset of the data, e.g., 60%
+  n = dim(dtm_train)[1]
+  sample_idx = sample(1:n, n*0.6, replace=F)
+  dtm_train_sub = dtm_train[sample_idx, ]
+  y_subset = train$sentiment[sample_idx]
+  
+  # try lasso on this subset
+  tmpfit = glmnet(x = dtm_train_sub, 
+                  y = y_subset, 
+                  alpha = 1,
+                  family='binomial')
+  
+  # record selected variables using lambda.min
+  idx = which.min(tmpfit$lambda)
+  myvocab = colnames(dtm_train_sub)[which(tmpfit$beta[, idx] != 0)]
+  sub_vocab = as_tibble(table(myvocab))
+  
+  term_sel_count = sub_vocab %>% 
+    full_join(term_sel_count, by = "myvocab") %>%
+    replace(is.na(.), 0) %>%
+    mutate(freq = n + freq) %>%
+    select(-c(n))
+}
+
+```
+
+Finally, we select the top ´r max_terms´ terms. In other words, the terms that were selected the most and create the dictionary with those.
+
+```{r}
+term_sel_count = term_sel_count %>%
+  arrange(desc(freq))
+
+term_sel_count = term_sel_count[1:max_terms, ]
+
+write(term_sel_count$myvocab, "myvocab4.txt")
+```
+
+TODO: write some description for the graph
+
+```{r}
+terms_freqs = term_sel_count %>% 
+  left_join(prune.vocab, by = c("myvocab" = "term")) 
+
+wordcloud(words = terms_freqs$myvocab, freq = terms_freqs$term_count, max.words = 300, random.order = FALSE, colors = brewer.pal(8, "Dark2"))
+```
+
