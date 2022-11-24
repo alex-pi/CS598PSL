@@ -13,7 +13,7 @@ it_train = itoken(train$review,
                   preprocessor = tolower, 
                   tokenizer = word_tokenizer)
 vectorizer = vocab_vectorizer(create_vocabulary(myvocab, 
-                                                ngram = c(1L, 2L)))
+                                                ngram = c(1L, 4L)))
 dtm_train = create_dtm(it_train, vectorizer)
 
 #####################################
@@ -49,7 +49,7 @@ it_test = itoken(test$review,
                   preprocessor = tolower, 
                   tokenizer = word_tokenizer)
 vectorizer = vocab_vectorizer(create_vocabulary(myvocab, 
-                                                ngram = c(1L, 2L)))
+                                                ngram = c(1L, 4L)))
 dtm_test = create_dtm(it_test, vectorizer)
 
 preds = predict(glmnet_classifier, dtm_test, type = 'response')[,1]

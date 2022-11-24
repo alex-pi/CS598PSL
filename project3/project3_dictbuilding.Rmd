@@ -55,10 +55,10 @@ train = read.table("alldata.tsv",
 
 ```{r eval=FALSE, class.source = 'fold-hide'}
 # just for testing
-train = train[1:10000, ]
+#train = train[1:10000, ]
 ```
 
-To build the dictionary we focused on ´review´ and ´sentiment´. We want a dictionary of terms that are significant for sentiment prediction. In the example below, the review has a positive sentiment.
+To build the dictionary we focused on `review` and `sentiment`. We want a dictionary of terms that are significant for sentiment prediction. In the example below, the review has a positive sentiment.
 
 ```{r}
 train[1,]$review
@@ -74,9 +74,9 @@ train$review = gsub('<.*?>', ' ', train$review)
 #train$review = gsub("[^[:alnum:]]", " ", train$review)
 ```
 
-Below we use ´text2vec´ to create a vocabulary, the function ´create_vocabulary´ uses an iterator that tokenizes words/terms and change them to lower case.
+Below we use `text2vec` to create a vocabulary, the function `create_vocabulary` uses an iterator that tokenizes words/terms and change them to lower case.
 
-´create_vocabulary´ creates 2 main statistics for each term:
+`create_vocabulary` creates 2 main statistics for each term:
 
 - term_count, number of occurrences of a term across all reviews.
 - doc_count, number of reviews a term appears into.
@@ -98,8 +98,8 @@ stop_words = c("i", "me", "my", "myself",
                "it", "its", "the", "us")
 
 full.vocab = create_vocabulary(it_train, 
-                              stopwords = stop_words,#tm::stopwords('english'), 
-                              ngram = c(1L,4L))
+                      stopwords = stop_words, 
+                              ngram = c(1L, 4L))
 ```
 
 We prune the vocabulary with the following criteria:
@@ -116,8 +116,8 @@ prune.vocab = prune_vocabulary(full.vocab, term_count_min = 10,
                              doc_proportion_min = 0.001)
 ```
 
-The number of terms after pruning is reduced from ´r dim(full.vocab)[1]´ to 
-´r dim(prune.vocab)[1]´
+The number of terms after pruning is reduced from `r dim(full.vocab)[1]` to 
+`r dim(prune.vocab)[1]`
 
 ## Vocabulary optimization.
 
@@ -131,19 +131,19 @@ dtm_train = create_dtm(it_train, vocab_vectorizer(prune.vocab))
 
 ```{r}
 T_ = 50; 
-max_terms = 1000#982
+max_terms = 1000
 ```
 
 
-The resulting DTM matrix has dimensions: ´r dim(dtm_train)´.
+The resulting DTM matrix has dimensions: `r dim(dtm_train)`.
 
-In the code below we produced the final vocabulary which should contain ´1000´ terms or less. To achieve this we perform the following steps:
+In the code below we produced the final vocabulary which should contain `1000` terms or less. To achieve this we perform the following steps:
 
 1. Sample a subset of the terms in the DTM matrix.
-2. Fit a ´GLM´ model with ´Lasso´ using the ´sentiment´ variable as a binary response.
+2. Fit a `GLM` model with `Lasso` using the `sentiment` variable as a binary response.
 3. Using $\lambda_{min}$ select the terms which coefficients $\hat\beta \neq 0$.
 
-We repeat the procedure ´r T_´ times keeping a count of the times each fitted model selects each term. 
+We repeat the procedure `r T_` times keeping a count of the times each fitted model selects each term. 
 
 The goal is to increase the number of terms that are actually relevant for sentiment classification.
 
@@ -151,11 +151,11 @@ The goal is to increase the number of terms that are actually relevant for senti
 
 # Initialize a data frame to keep count of term selections.
 term_sel_count = data.frame(myvocab = "", freq = 0)
-#uin_4 = 2110
-#set.seed(uin_4)
 
 for( t in 1:T_){
-  print(paste("##### t =", t))
+  #print(paste("##### t =", t))
+  uin_4 = 2110
+  set.seed(uin_4 + t)  
   
   # randomly sample a subset of the data, e.g., 60%
   n = dim(dtm_train)[1]
@@ -183,7 +183,7 @@ for( t in 1:T_){
 
 ```
 
-Finally, we select the top ´r max_terms´ terms. In other words, the terms that were selected the most and create the dictionary with those.
+Finally, we select the top `r max_terms` terms. In other words, the terms that were selected the most and create the dictionary with those.
 
 These terms are then written to our vocab file.
 
@@ -193,7 +193,7 @@ term_sel_count = term_sel_count %>%
 
 term_sel_count = term_sel_count[1:max_terms, ]
 
-write(term_sel_count$myvocab, "myvocab4.txt")
+# write(term_sel_count$myvocab, "myvocab2.txt")
 ```
 
 We can easily view our selected vocab terms as well as the frequency of those terms in a word cloud visualization, where the size and color of each word correlates to the frequency. This visualization allows for an easy 'sanity check' of our vocabulary since we would ideally expect all the words to be terms that carry positive or negative sentiments, though some of the larger words may be those which are less outright positive or negative and are simply just more commonly used.

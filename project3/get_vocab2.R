@@ -57,4 +57,4 @@ for( i in 1:T_){
 term_count = term_count %>%
   arrange(desc(freq))
 
-write(term_count[1:982, ]$myvocab, "myvocab2.txt")
+write(term_count[1:982, ]$myvocab, "myvocab4.txt")

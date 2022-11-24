@@ -5,6 +5,7 @@ min_auc = 1
 top_dir = getwd( )
 mymain = paste(top_dir, "/mymain.R", sep = '')
 
+tt = Sys.time()
 for (j in 1:5)
 {
   
@@ -16,7 +17,7 @@ for (j in 1:5)
   # Set directory to the current split's folder
   setwd(wd)
   
-  file.copy(file.path(top_dir,"myvocab.txt"), wd)
+  file.copy(file.path(top_dir,"myvocab.txt"), wd, overwrite = TRUE)
   
   
   source(mymain)
@@ -34,4 +35,5 @@ for (j in 1:5)
   setwd('..')
 }
 print(paste("Minimum AUC: ", min_auc))
+print(difftime(Sys.time(), tt, units = 'sec'))
 
