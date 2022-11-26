@@ -193,7 +193,7 @@ term_sel_count = term_sel_count %>%
 
 term_sel_count = term_sel_count[1:max_terms, ]
 
-# write(term_sel_count$myvocab, "myvocab2.txt")
+write(term_sel_count$myvocab, "myvocab.txt")
 ```
 
 We can easily view our selected vocab terms as well as the frequency of those terms in a word cloud visualization, where the size and color of each word correlates to the frequency. This visualization allows for an easy 'sanity check' of our vocabulary since we would ideally expect all the words to be terms that carry positive or negative sentiments, though some of the larger words may be those which are less outright positive or negative and are simply just more commonly used.

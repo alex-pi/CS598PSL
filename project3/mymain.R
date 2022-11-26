@@ -8,6 +8,9 @@ library(glmnet)
 myvocab <- scan(file = "myvocab.txt", what = character())
 train <- read.table("train.tsv", stringsAsFactors = FALSE, header = TRUE)
 
+uin_4 = 2110
+set.seed(uin_4)  
+
 train$review <- gsub('<.*?>', ' ', train$review)
 it_train = itoken(train$review,
                   preprocessor = tolower, 
@@ -52,7 +55,8 @@ vectorizer = vocab_vectorizer(create_vocabulary(myvocab,
                                                 ngram = c(1L, 4L)))
 dtm_test = create_dtm(it_test, vectorizer)
 
-preds = predict(glmnet_classifier, dtm_test, type = 'response')[,1]
+preds = predict(glmnet_classifier, dtm_test, type = 'response'
+                , s = glmnet_classifier$lambda.1se)[,1]
 
 output = cbind(test$id, preds)
 output = as.data.frame(output)
