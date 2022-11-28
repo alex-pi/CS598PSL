@@ -1,0 +1,105 @@
+---
+title: "Project 4"
+author: "Tyler Zender"
+date: "11/27/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+#library(recommenderlab)
+library(DT)
+library(data.table)
+library(reshape2)
+library(hash)
+library(tidyverse)
+```
+
+## System I: Recommendation based on genres
+
+```{r}
+ myurl = "https://liangfgithub.github.io/MovieData/"
+
+
+# use colClasses = 'NULL' to skip columns
+ratings = read.csv(paste0(myurl, 'ratings.dat?raw=true'), 
+                   sep = ':',
+                   colClasses = c('integer', 'NULL'), 
+                   header = FALSE)
+colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
+```
+
+
+```{r}
+movies = readLines(paste0(myurl, 'movies.dat?raw=true'))
+movies = strsplit(movies, split = "::", fixed = TRUE, useBytes = TRUE)
+movies = matrix(unlist(movies), ncol = 3, byrow = TRUE)
+movies = data.frame(movies, stringsAsFactors = FALSE)
+colnames(movies) = c('MovieID', 'Title', 'Genres')
+movies$MovieID = as.integer(movies$MovieID)
+
+# convert accented characters
+movies$Title[73]
+movies$Title = iconv(movies$Title, "latin1", "UTF-8")
+movies$Title[73]
+
+# extract year
+movies$Year = as.numeric(unlist(
+  lapply(movies$Title, function(x) substr(x, nchar(x)-4, nchar(x)-1))))
+```
+
+
+```{r}
+users = read.csv(paste0(myurl, 'users.dat?raw=true'),
+                 sep = ':', header = FALSE)
+users = users[, -c(2,4,6,8)] # skip columns
+colnames(users) = c('UserID', 'Gender', 'Age', 'Occupation', 'Zip-code')
+```
+
+## System I: Recommendation based on genres - Version 1: Naive Approach
+
+A simple approach to recommending movies would be to average the individual's ratings on a per-genre basis. From this, we may select the genre with the highest rating given and suggest popular movies from that genre.
+
+First, we need to collect information about all the different genre types
+
+```{r}
+genres_col = movies$Genres
+distinct_genres = c()
+for (i in 1:length(genres_col)) {
+  single_genre_set = genres_col[i]
+  split_genres = unlist(strsplit(single_genre_set, "|", fixed=TRUE))
+  distinct_genres = union(split_genres, distinct_genres)
+}
+```
+
+Next, we need to define our 'popular' movies for each genre. In this case, our definition will be movies with the highest ratings for each genre.
+
+```{r}
+movies_ratings = left_join(movies, ratings, by = "MovieID")
+movies_avg_ratings = movies_ratings %>% group_by(MovieID) %>% summarise_at(vars(Rating), list(AvgRating = mean))
+movies_avg_ratings = left_join(movies_avg_ratings, movies[,c("MovieID", "Genres")], by = "MovieID")
+movies_avg_ratings = movies_avg_ratings %>% separate_rows(Genres, sep='\\|') %>% arrange(Genres, desc(AvgRating))
+top_movies_per_genre = movies_avg_ratings %>% group_by(Genres) %>% slice_max(order_by = AvgRating, n = 5)
+top_movies_per_genre = left_join(top_movies_per_genre, movies[,c("MovieID", "Title", "Year")], by = "MovieID")
+```
+
+We can then test this approach with a user's ratings. 
+
+```{r}
+ratings_user1 = ratings[which(ratings$UserID == 1),]
+ratings_user1 = left_join(ratings_user1, movies, by = "MovieID")
+ratings_user1 = ratings_user1 %>% separate_rows(Genres, sep='\\|') %>% group_by(Genres) %>% summarise_at(vars(Rating), list(AvgRating = mean)) %>% slice_max(order_by = AvgRating, n = 1)
+top_genre_user1 = ratings_user1$Genres
+```
+
+In this case, we see that the top genre for this user is `top_genre_user1`. We then suggest the following top 5 most popular movies for this genre:
+
+```{r}
+top_movies_per_genre %>% filter(Genres == top_genre_user1)
+```
+
