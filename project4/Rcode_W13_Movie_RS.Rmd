@@ -1,0 +1,151 @@
+---
+title: "Rcode_W13_Movie_RS"
+output: html_document
+date: "2022-11-28"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Movielense Data: Recommender System
+
+```{r}
+list.of.packages <- c("recommenderlab", "Matrix")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(recommenderlab)
+library(Matrix)
+
+```
+
+## Read in Data
+
+```{r}
+ratings = read.csv('ratings.dat', 
+                   sep = ':',
+                   colClasses = c('integer', 'NULL'), 
+                   header = FALSE)
+colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
+ratings$Timestamp = NULL
+```
+
+## Evaluation I
+
+### Training Test Split
+
+Create
+
+ - train data that contain about 80% rows of ratings.dat
+
+ - test data that contain about 20% of rows of ratings.dat
+
+```{r}
+set.seed(100)
+train.id = sample(nrow(ratings), floor(nrow(ratings)) * 0.8)
+train = ratings[train.id, ]
+head(train)
+```
+
+```{r}
+test = ratings[-train.id, ]
+head(test)
+```
+
+## Recommender System
+
+First create a utility matrix stored as a sparse matrix.
+
+```{r}
+i = paste0('u', train$UserID)
+j = paste0('m', train$MovieID)
+x = train$Rating
+tmp = data.frame(i, j, x, stringsAsFactors = T)
+Rmat = sparseMatrix(as.integer(tmp$i), as.integer(tmp$j), x = tmp$x)
+rownames(Rmat) = levels(tmp$i)
+colnames(Rmat) = levels(tmp$j)
+Rmat = new('realRatingMatrix', data = Rmat)
+```
+
+Rmat is a 6040-by-3681 sparse matrix. Its rows correspond to the unique 6040 users in the training data, and columns correspond to the unique 3681 movies in the training data (although the MovieIDs range from 1 to 3952).
+
+```{r}
+range(train$MovieID)
+```
+
+```{r}
+length(unique(train$MovieID))
+```
+
+```{r}
+range(train$UserID)
+```
+
+```{r}
+length(unique(train$UserID))
+```
+
+```{r}
+dim(Rmat)
+```
+
+Train a recommender system using R package [recommenderlab]
+
+```{r}
+rec_UBCF = Recommender(Rmat, method = 'UBCF',
+                  parameter = list(normalize = 'Z-score', 
+                                   method = 'Cosine', 
+                                   nn = 25))
+#Summary of model parameters
+rec_UBCF@model
+```
+
+Make prediction on the test data
+
+First let’s predict all un-rated movies for the first three users in the training data. No information for users not in the training data; the coldstart issue.
+
+```{r}
+recom = predict(rec_UBCF, 
+                Rmat[1:3], type = 'ratings')
+```
+
+We display the original and predicted ratings of the first 10 movies for the three users. Note that the final prediction could still have missing values. You can consider filling in the missing values with some constant.
+
+```{r}
+as(recom, 'matrix')[, 1:10]
+```
+
+```{r}
+as(Rmat, 'matrix')[1:3, 1:10]
+```
+
+You can use the code blow to compute RMSE for the test data. Note that this evaluation takes a long time.
+
+```{r}
+# This may take a long time
+recom = predict(rec_UBCF, 
+                Rmat, type = 'ratings')  
+rec_list = as(recom, 'list')  # each element are ratings of that user
+
+test.pred = test
+test.pred$rating = NA
+
+# For all lines in test file, one by one
+for (u in 1:nrow(test)){
+
+    # Read userid and movieid from columns 2 and 3 of test data
+    userid = as.numeric(test$UserID[u])
+    movieid = as.numeric(test$MovieID[u])
+    
+    rating = rec_list[[userid]][movieid]
+    # handle missing values; 2.5 might not be the ideal choice
+    test.pred$rating[u] = ifelse(is.na(rating), 2.5, rating)
+}
+
+# Calculate RMSE
+sqrt(mean((test$rating - test.pred$rating)^2)) 
+```
+
