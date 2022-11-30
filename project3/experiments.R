@@ -15,7 +15,7 @@ mylasso.coef.1se_e = exp(mylasso.coef.1se)
 pos_words = row.names(mylasso.coef.1se_e)[which(mylasso.coef.1se_e > 1)][-1]
 pos_coef = mylasso.coef.1se_e[which(mylasso.coef.1se_e > 1)][-1]
 posdf = data.frame(pos_words=pos_words, pos_coef=pos_coef)
-posdf[order(posdf$pos_coef, decreasing = FALSE), ][1:100,]
+posdf[order(posdf$pos_coef, decreasing = TRUE), ][1:10,]
 posdf$pos_coefl = log(posdf$pos_coef)
 
 posdf[posdf$pos_words == "this_excellent",]

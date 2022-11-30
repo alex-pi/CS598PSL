@@ -23,7 +23,7 @@ library(tidyverse)
 ## System I: Recommendation based on genres
 
 ```{r}
- myurl = "https://liangfgithub.github.io/MovieData/"
+myurl = "https://liangfgithub.github.io/MovieData/"
 
 
 # use colClasses = 'NULL' to skip columns

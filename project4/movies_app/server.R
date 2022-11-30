@@ -1,4 +1,6 @@
 library(ShinyRatingInput)
+source('data_helpers.R')
+source('naive1_recom.R')
 
 get_user_ratings = function(value_list) {
   dat = data.table(MovieID = sapply(strsplit(names(value_list), "_"), 
@@ -10,19 +12,8 @@ get_user_ratings = function(value_list) {
   dat = dat[Rating > 0]
 }
 
-# read in data
-myurl = "https://liangfgithub.github.io/MovieData/"
-movies = readLines(paste0(myurl, 'movies.dat?raw=true'))
-movies = strsplit(movies, split = "::", fixed = TRUE, useBytes = TRUE)
-movies = matrix(unlist(movies), ncol = 3, byrow = TRUE)
-movies = data.frame(movies, stringsAsFactors = FALSE)
-colnames(movies) = c('MovieID', 'Title', 'Genres')
-movies$MovieID = as.integer(movies$MovieID)
-movies$Title = iconv(movies$Title, "latin1", "UTF-8")
-
-small_image_url = "https://liangfgithub.github.io/MovieImages/"
-movies$image_url = sapply(movies$MovieID, 
-                          function(x) paste0(small_image_url, x, '.jpg?raw=true'))
+movies = get_movies_data()
+ratings = get_ratings_data()
 
 shinyServer(function(input, output, session) {
   
@@ -53,13 +44,13 @@ shinyServer(function(input, output, session) {
       # get the user's rating data
       value_list <- reactiveValuesToList(input)
       user_ratings <- get_user_ratings(value_list)
+      print(user_ratings)
       
-      user_results = (1:10)/10
-      user_predicted_ids = 1:10
-      recom_results <- data.table(Rank = 1:10, 
-                                  MovieID = movies$MovieID[user_predicted_ids], 
-                                  Title = movies$Title[user_predicted_ids], 
-                                  Predicted_rating =  user_results)
+      preds = naive1_recom(user_ratings)
+      recom_results <- data.table(Rank = preds$Rank, 
+                                  MovieID = preds$MovieID, 
+                                  Title = preds$Title, 
+                                  Predicted_rating = movies$Rating)
       
     }) # still busy
     
