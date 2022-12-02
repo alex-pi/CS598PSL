@@ -1,11 +1,12 @@
 library( pROC )
 
-set.seed( 867 )
+uin_4 = 2110
+set.seed( uin_4 )  
 
 # global variables
 results        = matrix( 0, 5, 2 )
 regexp         = "" # [^a-zA-Z0-9]"
-loss_type      = 0    # 0=ridge, 1=lasso, 2=XGBoost
+loss_type      = 2    # 0=ridge, 1=lasso, 2=XGBoost
 sample_rate    = 0.55
 n_gram         = c(1L, 4L )
 nb_folds       = 4
