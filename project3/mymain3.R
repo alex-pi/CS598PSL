@@ -2,6 +2,9 @@ library( text2vec )
 library( glmnet )
 require( xgboost )
 
+uin_4 = 2110
+set.seed( uin_4 )  
+
 #####################################
 # Load libraries
 # Load your vocabulary and training data
