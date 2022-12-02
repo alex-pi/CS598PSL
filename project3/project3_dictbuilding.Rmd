@@ -5,7 +5,7 @@ author:
  - Tyler Zender (netID tzender2)
  - Matthew Lind (netID lind6)
  - Alejandro Pimentel (netID ap41,UIN 659282110)
-date: ''
+date: '11/28/2022'
 output:
   html_document: 
     theme: readable
@@ -45,17 +45,11 @@ if(length(new.packages)) install.packages(new.packages)
 library(text2vec)
 library(glmnet)
 library(dplyr)
-#library(tm)
 library(wordcloud)
 
 train = read.table("alldata.tsv",
                    stringsAsFactors = FALSE,
                    header = TRUE)
-```
-
-```{r eval=FALSE, class.source = 'fold-hide'}
-# just for testing
-#train = train[1:10000, ]
 ```
 
 To build the dictionary we focused on `review` and `sentiment`. We want a dictionary of terms that are significant for sentiment prediction. In the example below, the review has a positive sentiment.
@@ -71,7 +65,6 @@ Some reviews contain undesired characters, below we remove some of them.
 
 ```{r}
 train$review = gsub('<.*?>', ' ', train$review)
-#train$review = gsub("[^[:alnum:]]", " ", train$review)
 ```
 
 Below we use `text2vec` to create a vocabulary, the function `create_vocabulary` uses an iterator that tokenizes words/terms and change them to lower case.
@@ -204,4 +197,8 @@ terms_freqs = term_sel_count %>%
 
 wordcloud(words = terms_freqs$myvocab, freq = terms_freqs$term_count, max.words = 300, random.order = FALSE, colors = brewer.pal(8, "Dark2"))
 ```
+
+## Acknowledgment
+
+The ideas for the code presented here are mainly from the information shared by Prof. Feng Liang via Campuswire.
 

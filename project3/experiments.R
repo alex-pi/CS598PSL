@@ -66,3 +66,32 @@ length(idxs)
 train[idxs , ]$sentiment
 
 mean(train[idxs , ]$sentiment)
+
+##########
+
+setwd('..')
+j = 1
+wd = paste( getwd( ), "/split_", j, sep = '')
+setwd(wd)
+test <- read.table("test.tsv", stringsAsFactors = FALSE, header = TRUE)
+
+
+
+colnames(test)
+which(test$id == 598)
+which(test$id == 22235)
+
+test[train$id == 598, ]
+test[train$id == 22235, ]
+
+test <- read.table("../alldata.tsv", stringsAsFactors = FALSE, header = TRUE)
+
+
+
+
+
+
+
+
+
+
