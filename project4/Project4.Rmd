@@ -19,6 +19,7 @@ library(reshape2)
 library(hash)
 library(tidyverse)
 library(Matrix)
+library(proxy)
 ```
 
 ## System I: Recommendation based on genres
@@ -169,70 +170,50 @@ test = Rmat[501, ]
 ```
 
 ```{r}
-#mymat = as(train, "data.frame")
-#summ <- summary(train)
-#train_df = data.frame(Origin      = rownames(train)[summ$i],
-#           Destination = colnames(train)[summ$j],
-#           Weight      = summ$x)
-
 mytrain = train
 mytest = test
 
 # Step 1: Normalize both the train and test datasets
 mytrain = normalize(mytrain, method="center", row=TRUE)
+test_mean = rowMeans(mytest)
 mytest = normalize(mytest, method="center", row=TRUE)
 
 # Step 2: Similarity
-similarities = similarity(mytrain, mytest, method = 'Cosine')
-vals = unlist(as(similarities, "vector"))
+sim = similarity(mytrain, mytest, method = 'cosine', which = "users")
 
 # Step 3: Top 20
-lst <- sort(vals, index.return=TRUE, decreasing=TRUE)
-top20 = unlist(lapply(lst, `[`, lst$x %in% head(unique(lst$x),1)))[2]
-top20_similarities = vals[unlist(top20)]
-
+top_20_similarity_values = tail(sort(sim),20)
+top_20_lower_bound = top_20_similarity_values[1]
+top_20_by_similarity_indexes = which(sim >= top_20_lower_bound)
 
 # Step 4: Compute weighted average
-mytop20 = as(mytrain[top20], "data.frame")
-mytop20_avged = mytop20 %>% group_by(item) %>% summarise_at(vars(rating), list(AvgRating = mean))
-mytop20_avged = mytop20_avged %>% mutate(AvgRating = AvgRating+2.5)
+top_20_similar_users_ratings = mytrain[top_20_by_similarity_indexes]
+weights_vec = as(sim[top_20_by_similarity_indexes], "matrix")
+weights = matrix(weights_vec, nrow=20, ncol=3706)
+top_20_similar_users_ratings_weighted = as(top_20_similar_users_ratings, "matrix")*weights
+#View(weights)
+#View(as(top_20_similar_users_ratings, "matrix"))
+#View(as(top_20_similar_users_ratings_weighted, "matrix"))
+mysums = colSums(is.na(top_20_similar_users_ratings_weighted))
+na_idxs = which(mysums == 20)
+weights_nas_removed = weights
+weights_nas_removed[is.na(top_20_similar_users_ratings_weighted)] = NA
+averaged_ratings_for_top_20_similar_users = colSums(top_20_similar_users_ratings_weighted, na.rm = TRUE)/colSums(weights_nas_removed, na.rm = TRUE)
+averaged_ratings_for_top_20_similar_users[na_idxs] = NA 
 
-# n <- 2
-# 
-# for(i in 1:n) {
-#   tmp_similarities <- ith_similar(similarities, i)
-# 
-#   data <- cbind(data, tmp_similarities)
-# }
-#     
-# dist()
-# for (i in 1:500)
-# {
-#   
-#   single_user_ratings = as(train[i], "data.frame")
-#   single_user_mean = mean(single_user_ratings$rating)
-#   
-# }
-# train_norm = train/rowMeans(train)
-# test_norm = test/rowMeans(test)
-# 
-# # Step 2: Create the cosine similarities in the form of a n-by-1 vector between the test user and each of the training users
-# similarities = rep(0, 500)
-# for (i in 1:500)
-# {
-#   train_vec = train_norm[i]
-#   test_vec = test_norm
-# }
-# 
-
-
+# Step 5: Replace with NAs
+tmp.y = as.vector(as(mytest, "matrix"))
+ind.y = which(!is.na(tmp.y))
+averaged_ratings_for_top_20_similar_users[ind.y] = NA
+averaged_ratings_for_top_20_similar_users = averaged_ratings_for_top_20_similar_users + test_mean
+mypred = averaged_ratings_for_top_20_similar_users
 ```
 
 ```{r}
 recommender.UBCF <- Recommender(train, method = "UBCF",
                                 parameter = list(normalize = 'center', 
                                                  method = 'Cosine', 
-                                                 nn = 1))
+                                                 nn = 20))
 
 p.UBCF <- predict(recommender.UBCF, test, type="ratings")
 p.UBCF <- as.numeric(as(p.UBCF, "matrix"))
@@ -241,5 +222,94 @@ sum(is.na(p.UBCF) != is.na(mypred)) ### should be zero
 max(abs(p.UBCF - mypred), na.rm = TRUE)  ### should be less than 1e-06 
 ```
 
+## System II: IBCF
+
+```{r}
+
+library(recommenderlab)
+myurl = "https://liangfgithub.github.io/MovieData/"
+ratings = read.csv(paste0(myurl, 'ratings.dat?raw=true'), 
+                   sep = ':',
+                   colClasses = c('integer', 'NULL'), 
+                   header = FALSE)
+colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
+i = paste0('u', ratings$UserID)
+j = paste0('m', ratings$MovieID)
+x = ratings$Rating
+tmp = data.frame(i, j, x, stringsAsFactors = T)
+Rmat = sparseMatrix(as.integer(tmp$i), as.integer(tmp$j), x = tmp$x)
+rownames(Rmat) = levels(tmp$i)
+colnames(Rmat) = levels(tmp$j)
+Rmat = new('realRatingMatrix', data = Rmat)
+
+train = Rmat[1:500, ]
+test = Rmat[501, ]
+```
 
 
+```{r}
+
+options(digits=10)
+
+
+mytrain = train
+mytest = test
+
+# Step 1: Normalize both the train and test datasets
+mytrain = normalize(mytrain, method="center", row=TRUE)
+test_mean = rowMeans(mytest)
+mytest = normalize(mytest, method="center", row=TRUE)
+
+# Step 2: Similarity
+sim_mat = matrix(NA, 3706, 3706)
+#sim = as(similarity(mytrain, method = 'cosine', which = "items"), "matrix")
+#sim1 = proxy::simil(as(mytrain, "matrix"), method = "cosine", which = "items")
+sim1 = proxy::simil(as(mytrain, "matrix"), by_rows = FALSE, method = "cosine")
+sim1 = (1 + sim1)/2
+sim=as(sim1, "matrix")
+for (i in 1:3706)
+{
+  tmp.x = as.vector(sim[i, ])
+  tmp.x[is.na(tmp.x)] = 0
+  top_30_similarity_values = tail(sort(tmp.x),30)
+  top_30_lower_bound = top_30_similarity_values[1]
+  top_30_by_similarity_indexes = which(tmp.x >= top_30_lower_bound)
+  sim_mat[i,top_30_by_similarity_indexes] = tmp.x[top_30_by_similarity_indexes]
+}
+
+# Step 3: Predict
+tmp.y = as.vector(as(mytest, "matrix"))
+mypred = rep(NA, length(tmp.y))
+for (i in 1:length(tmp.y))
+{
+  if (is.na(tmp.y[i]))
+  {
+    current_movie_sim = sim_mat[i,]
+    
+    sim_mult_rating = tmp.y*current_movie_sim
+    non_null_sims = sim_mult_rating/tmp.y
+    mypred[i] = sum(sim_mult_rating, na.rm = TRUE)/sum(non_null_sims, na.rm = TRUE)
+  }
+}
+
+# Step 4: Add back mean for the test user
+mypred = mypred + test_mean
+
+```
+
+```{r}
+recommender.IBCF <- Recommender(train, method = "IBCF",
+                                parameter = list(normalize = 'center', 
+                                                 method = 'Cosine', 
+                                                 k = 30))
+
+p.IBCF <- predict(recommender.IBCF, test, type="ratings")
+p.IBCF <- as.numeric(as(p.IBCF, "matrix"))
+
+## first output: should be less than 10
+sum(is.na(p.IBCF) != is.na(mypred))  
+
+## second output: should be less than 10%
+mydiff = abs(p.IBCF - mypred)
+sum(mydiff[!is.na(mydiff)] > 1e-6) / sum(!is.na(mydiff)) 
+```
