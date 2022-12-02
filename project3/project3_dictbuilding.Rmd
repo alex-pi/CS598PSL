@@ -198,7 +198,177 @@ terms_freqs = term_sel_count %>%
 wordcloud(words = terms_freqs$myvocab, freq = terms_freqs$term_count, max.words = 300, random.order = FALSE, colors = brewer.pal(8, "Dark2"))
 ```
 
-## Acknowledgment
+## Adittional code
 
-The ideas for the code presented here are mainly from the information shared by Prof. Feng Liang via Campuswire.
+The code below corresponds to additional models we tried and analyze in the final report. 
+
+```{r eval=FALSE, class.source = 'fold-hide'}
+library( text2vec )
+library( glmnet )
+require( xgboost )
+
+#####################################
+# Load libraries
+# Load your vocabulary and training data
+#####################################
+myvocab <- scan( file = "myvocab3.txt", what = character() )
+train   <- read.table( "train.tsv", stringsAsFactors = FALSE, header = TRUE )
+
+# train$review <- gsub( "[\'\"]", "", train$review )   # remove contractions/possessives
+train$review <- gsub( '<.*?>', ' ', train$review )     # remove HTML tags
+if ( regexp != "" ) {
+  train$review <- gsub( regexp, ' ', train$review )   # other
+}
+
+it_train   = itoken( train$review, preprocessor = tolower, tokenizer = word_tokenizer )
+vectorizer = vocab_vectorizer( create_vocabulary( myvocab, ngram = n_gram ) )
+dtm_train  = create_dtm( it_train, vectorizer )
+
+#####################################
+# Train a binary classification model
+#####################################
+
+NFOLDS = nb_folds
+t1     = Sys.time()
+
+if ( loss_type == 2 ) {
+  # Gradient boosting tree
+  xgboost_classifier <- xgboost(
+    data      = as.matrix( dtm_train ),
+    label     = train$sentiment,
+    max_depth = 4,
+    eta       = 0.115,
+    nrounds   = max_iterations,
+    subsample = sample_rate,
+    verbose   = FALSE
+  )
+} else {
+  # ridge/lasso regularization
+  glmnet_classifier = cv.glmnet(
+    x            = dtm_train,
+    y            = train$sentiment,
+    family       = 'binomial',
+    alpha        = loss_type,       # 0=L2 penalty (Ridge), 1=L1 penalty (lasso)
+    type.measure = "auc",           # interested in area under ROC curve
+    nfolds       = NFOLDS,          # 4-fold cross-validation
+    thresh       = threshold,       # high value is less accurate, but faster training
+    maxit        = max_iterations   # again lower number of iterations for faster training
+  )
+}
+
+d_time = difftime( Sys.time(), t1, units = 'sec' )
+print( d_time )
+results[j,1] = d_time
+
+#####################################
+# Load test data, and 
+# Compute prediction
+#####################################
+test <- read.table( "test.tsv", stringsAsFactors = FALSE, header = TRUE )
+
+# test$review = gsub( "[\'\"]", "", test$review )   # remove contractions/possessives
+test$review <- gsub( '<.*?>', ' ', test$review )    # remove HTML tags
+if ( regexp != "" ) {
+  test$review <- gsub( regexp, ' ', test$review )   # other
+}
+
+it_test    = itoken( test$review, preprocessor = tolower, tokenizer = word_tokenizer )
+vectorizer = vocab_vectorizer( create_vocabulary( myvocab, ngram = n_gram ) )
+dtm_test   = create_dtm( it_test, vectorizer )
+
+if ( loss_type == 2 ) {
+  # gradient boosting tree
+  preds = predict( xgboost_classifier, dtm_test, type = 'response' )
+} else {
+  # Lasso/ridge regression
+  preds = predict( glmnet_classifier, dtm_test, type = 'response' )[,1]
+}
+
+output = cbind( test$id, preds )
+output = as.data.frame( output )
+colnames( output ) = c( 'id', 'prob' )
+
+#####################################
+# Store your prediction for test data in a data frame
+# "output": col 1 is test$id
+#           col 2 is the predicted probs
+#####################################
+write.table( output, file = "mysubmission.txt", row.names = FALSE, sep='\t' )
+
+```
+
+The code below is for evaluation.
+
+```{r eval=FALSE, class.source = 'fold-hide'}
+library( pROC )
+
+set.seed( 867 )
+
+# global variables
+results        = matrix( 0, 5, 2 )
+regexp         = "" # [^a-zA-Z0-9]"
+loss_type      = 0    # 0=ridge, 1=lasso, 2=XGBoost
+sample_rate    = 0.55
+n_gram         = c(1L, 4L )
+nb_folds       = 4
+threshold      = 1e-3
+max_iterations = 1e3
+
+min_auc = 1
+
+top_dir = getwd( )
+mymain  = paste( top_dir, "/mymain.R", sep = '' )
+
+tt = Sys.time()
+str = NULL
+for ( j in 1:5 )
+{
+  cat( str, "--- split ", j, " ---\n", sep="" )
+  #print( paste( "J:", j ) )
+  
+  # Get the current split's working directory path 
+  wd = paste( getwd( ), "/split_", j, sep = '' )
+  
+  # Set directory to the current split's folder
+  setwd( wd )
+  
+  file.copy( file.path( top_dir, "myvocab3.txt" ), wd, overwrite = TRUE )
+  
+  source( mymain )
+  
+  # move "test_y.tsv" to this directory
+  test.y  <- read.table( "test_y.tsv",       header = TRUE )
+  pred    <- read.table( "mysubmission.txt", header = TRUE )
+  pred    <- merge( pred, test.y, by="id" )
+  roc_obj <- roc( pred$sentiment, pred$prob )
+  this_split_auc = pROC::auc( roc_obj )
+  #print( paste( "split AUC:", this_split_auc ) )
+  cat( str, "AUC: ", this_split_auc, "\n", sep="" )
+  results[j,2] = this_split_auc
+  min_auc = min( min_auc, this_split_auc )
+  setwd( '..' )
+}
+#print( paste( "Minimum AUC: ", min_auc ) )
+d_time = difftime( Sys.time(), tt, units = 'sec' )
+
+#------------------------------------------------
+cat( str, "--- results ---",
+     "\n Loss Type: ", loss_type, 
+     "\n    N-gram: ", n_gram[1], " ", n_gram[2], 
+     "\n   NbFolds: ", nb_folds,
+     "\n threshold: ", threshold, 
+     "\niterations: ", max_iterations, 
+     "\n    regexp: ", regexp, 
+     "\n",
+     "\n", results[1,1], " sec   AUC: ", results[1,2],
+     "\n", results[2,1], " sec   AUC: ", results[2,2],
+     "\n", results[3,1], " sec   AUC: ", results[3,2],
+     "\n", results[4,1], " sec   AUC: ", results[4,2],
+     "\n", results[5,1], " sec   AUC: ", results[5,2],
+     "\n\n", d_time, " sec   min AUC: ", min_auc, 
+     "\n", 
+     sep=""
+)
+
+```
 
