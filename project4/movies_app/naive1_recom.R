@@ -1,7 +1,7 @@
 
 
-naive1_recom = function(user_ratings) {
-  
+naive1_recom = function(user_ratings, movies) {
+  print("Started Naive.")
   movies_ratings = left_join(movies, ratings, by = "MovieID")
   movies_avg_ratings = movies_ratings %>% 
     group_by(MovieID) %>% 
@@ -42,7 +42,8 @@ naive1_recom = function(user_ratings) {
   
   print(predictions)
   
+  print("Finished Naive.")
   predictions
 }
 
-naive1_recom(data.frame(MovieID=c(2,10), Rating=c(2,4)))
+#naive1_recom(data.frame(MovieID=c(2,10), Rating=c(2,4)))

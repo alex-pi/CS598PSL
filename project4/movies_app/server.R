@@ -1,4 +1,14 @@
 library(ShinyRatingInput)
+library(dplyr)
+library(ggplot2)
+library(recommenderlab)
+library(DT)
+library(data.table)
+library(reshape2)
+library(hash)
+library(tidyverse)
+library(Matrix)
+library(proxy)
 source('data_helpers.R')
 source('naive1_recom.R')
 
@@ -11,9 +21,6 @@ get_user_ratings = function(value_list) {
   dat[, ':=' (MovieID = as.numeric(MovieID), Rating = as.numeric(Rating))]
   dat = dat[Rating > 0]
 }
-
-movies = get_movies_data()
-ratings = get_ratings_data()
 
 shinyServer(function(input, output, session) {
   
@@ -46,7 +53,7 @@ shinyServer(function(input, output, session) {
       user_ratings <- get_user_ratings(value_list)
       print(user_ratings)
       
-      preds = naive1_recom(user_ratings)
+      preds = naive1_recom(user_ratings, movies)
       recom_results <- data.table(Rank = preds$Rank, 
                                   MovieID = preds$MovieID, 
                                   Title = preds$Title, 
