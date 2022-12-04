@@ -191,9 +191,6 @@ top_20_similar_users_ratings = mytrain[top_20_by_similarity_indexes]
 weights_vec = as(sim[top_20_by_similarity_indexes], "matrix")
 weights = matrix(weights_vec, nrow=20, ncol=3706)
 top_20_similar_users_ratings_weighted = as(top_20_similar_users_ratings, "matrix")*weights
-#View(weights)
-#View(as(top_20_similar_users_ratings, "matrix"))
-#View(as(top_20_similar_users_ratings_weighted, "matrix"))
 mysums = colSums(is.na(top_20_similar_users_ratings_weighted))
 na_idxs = which(mysums == 20)
 weights_nas_removed = weights
@@ -249,9 +246,6 @@ test = Rmat[501, ]
 
 ```{r}
 
-options(digits=10)
-
-
 mytrain = train
 mytest = test
 
@@ -262,8 +256,6 @@ mytest = normalize(mytest, method="center", row=TRUE)
 
 # Step 2: Similarity
 sim_mat = matrix(NA, 3706, 3706)
-#sim = as(similarity(mytrain, method = 'cosine', which = "items"), "matrix")
-#sim1 = proxy::simil(as(mytrain, "matrix"), method = "cosine", which = "items")
 sim1 = proxy::simil(as(mytrain, "matrix"), by_rows = FALSE, method = "cosine")
 sim1 = (1 + sim1)/2
 sim=as(sim1, "matrix")
@@ -271,13 +263,11 @@ for (i in 1:3706)
 {
   tmp.x = as.vector(sim[i, ])
   tmp.x[is.na(tmp.x)] = 0
-  top_30_similarity_values = tail(sort(tmp.x),30)
-  top_30_lower_bound = top_30_similarity_values[1]
-  top_30_by_similarity_indexes = which(tmp.x >= top_30_lower_bound)
+  top_30_by_similarity_indexes = tail(order(tmp.x, decreasing = FALSE), 30)
   sim_mat[i,top_30_by_similarity_indexes] = tmp.x[top_30_by_similarity_indexes]
 }
 
-# Step 3: Predict
+# Step 3: Make predictions based on the user's existing predictions
 tmp.y = as.vector(as(mytest, "matrix"))
 mypred = rep(NA, length(tmp.y))
 for (i in 1:length(tmp.y))
