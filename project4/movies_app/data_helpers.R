@@ -6,23 +6,29 @@ path_resolver = (function(isRemote=TRUE) {
   small_image_path = "MovieImages/"
   movies_data_url = "https://liangfgithub.github.io/MovieData/"
   movies_data_path = "MovieData/"
-  remote = list(
-   img = function(x) paste0(small_image_url, x, '.jpg?raw=true'),
-   mov = paste0(movies_data_url, 'movies.dat?raw=true'),
-   rat = paste0(movies_data_url, 'ratings.dat?raw=true'),
-   usr = paste0(movies_data_url, 'users.dat?raw=true')
-  )
+
+  if(isRemote) {
+    remote = list(
+      img = function(x) paste0(small_image_url, x, '.jpg?raw=true'),
+      mov = paste0(movies_data_url, 'movies.dat?raw=true'),
+      rat = paste0(movies_data_url, 'ratings.dat?raw=true'),
+      usr = paste0(movies_data_url, 'users.dat?raw=true')
+    )    
+    return(remote)
+  }
   
   local = list(
-    img = function(x) paste0(small_image_path, x, '.jpg'),
+    # I could not make images load locally.
+    #img = function(x) paste0(small_image_path, x, '.jpg'),
+    img = function(x) paste0(small_image_url, x, '.jpg?raw=true'),
     mov = paste0(movies_data_path, 'movies.dat'),
-    rat = paste0(movies_data_path, 'ratings.dat'),
+    #rat = paste0(movies_data_path, 'ratings.dat'),
+    rat = unz(paste0(movies_data_path, 'ratings.zip'), 'ratings.dat'),
     usr = paste0(movies_data_path, 'users.dat')
   )
   
-  if(isRemote) return(remote)
   return(local)
-})()
+})(FALSE) # FALSE means data is found locally. 
 
 get_movies_data = function() {
   # read in data

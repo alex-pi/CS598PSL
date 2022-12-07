@@ -10,7 +10,8 @@ library(tidyverse)
 library(Matrix)
 library(proxy)
 source('data_helpers.R')
-source('naive1_recom.R')
+#source('naive1_recom.R')
+source('ibcf_recom.R')
 
 get_user_ratings = function(value_list) {
   dat = data.table(MovieID = sapply(strsplit(names(value_list), "_"), 
@@ -19,6 +20,7 @@ get_user_ratings = function(value_list) {
   dat = dat[!is.null(Rating) & !is.na(MovieID)]
   dat[Rating == " ", Rating := 0]
   dat[, ':=' (MovieID = as.numeric(MovieID), Rating = as.numeric(Rating))]
+  dat$UserID = 0
   dat = dat[Rating > 0]
 }
 
@@ -29,13 +31,16 @@ shinyServer(function(input, output, session) {
     num_rows <- 20
     num_movies <- 6 # movies per row
     
+    # Start with a random set of movies
+    s.movies = sample(1:dim(movies)[1], num_rows*num_movies)
+    s.movies = movies[s.movies, ]
+    
     lapply(1:num_rows, function(i) {
       list(fluidRow(lapply(1:num_movies, function(j) {
         list(box(width = 2,
-                 div(style = "text-align:center", img(src = movies$image_url[(i - 1) * num_movies + j], height = 150)),
-                 #div(style = "text-align:center; color: #999999; font-size: 80%", books$authors[(i - 1) * num_books + j]),
-                 div(style = "text-align:center", strong(movies$Title[(i - 1) * num_movies + j])),
-                 div(style = "text-align:center; font-size: 150%; color: #f0ad4e;", ratingInput(paste0("select_", movies$MovieID[(i - 1) * num_movies + j]), label = "", dataStop = 5)))) #00c0ef
+                 div(style = "text-align:center", img(src = s.movies$image_url[(i - 1) * num_movies + j], height = 150)),
+                 div(style = "text-align:center", strong(s.movies$Title[(i - 1) * num_movies + j])),
+                 div(style = "text-align:center; font-size: 150%; color: #f0ad4e;", ratingInput(paste0("select_", s.movies$MovieID[(i - 1) * num_movies + j]), label = "", dataStop = 5)))) #00c0ef
       })))
     })
   })
@@ -53,11 +58,12 @@ shinyServer(function(input, output, session) {
       user_ratings <- get_user_ratings(value_list)
       print(user_ratings)
       
-      preds = naive1_recom(user_ratings, movies)
+      #preds = naive1_recom(user_ratings, movies)
+      preds = ibcf_recom(user_ratings, movies, ratings)
       recom_results <- data.table(Rank = preds$Rank, 
                                   MovieID = preds$MovieID, 
                                   Title = preds$Title, 
-                                  Predicted_rating = movies$Rating)
+                                  Predicted_rating = preds$Rating)
       
     }) # still busy
     
