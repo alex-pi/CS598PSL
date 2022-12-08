@@ -26,7 +26,19 @@ get_user_ratings = function(value_list) {
 
 render_results = function(recom_result, num_rows = 2, num_movies_row = 5) {
   ### TODO, fix case < 10
+  #print(recom_result)
+  num_recom = ifelse(is.null(recom_result), 0, dim(recom_result)[1])
+  num_movies = dim(movies)[1]
   sprintf("\n# Recomendations: %d", dim(recom_result)[1]) %>% cat()
+  
+  # Complete recoms with top movie picks
+  if(num_recom < (num_rows * num_movies_row)) {
+    num_missing = (num_rows * num_movies_row) - num_recom
+    sprintf("\n# Extra recoms: %d", num_missing) %>% cat()
+    idx_miss = sample(1:num_movies, num_missing)
+    recom_result = bind_rows(recom_result, movies[idx_miss, ])
+    #print(recom_result)
+  }
   
   lapply(1:num_rows, function(i) {
     list(fluidRow(lapply(1:num_movies_row, function(j) {
@@ -77,9 +89,10 @@ shinyServer(function(input, output, session) {
     num_rows <- 20
     num_movies <- 6 # movies per row
     
+    s.movies = movies
     # Start with a random set of movies
-    s.movies = sample(1:dim(movies)[1], num_rows*num_movies)
-    s.movies = movies[s.movies, ]
+    #s.movies = sample(1:dim(movies)[1], num_rows*num_movies)
+    #s.movies = movies[s.movies, ]
     
     lapply(1:num_rows, function(i) {
       list(fluidRow(lapply(1:num_movies, function(j) {
