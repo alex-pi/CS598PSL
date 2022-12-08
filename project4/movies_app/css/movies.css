@@ -4,6 +4,11 @@
    overflow-y: scroll;
 }
 
+.genreslist {
+   padding-left: 5px; 
+   height: 70px;
+}
+
 .border-box {
    padding: 5px;
 }

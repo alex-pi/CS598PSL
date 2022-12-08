@@ -24,7 +24,53 @@ get_user_ratings = function(value_list) {
   dat = dat[Rating > 0]
 }
 
+render_results = function(recom_result, num_rows = 2, num_movies_row = 5) {
+  ### TODO, fix case < 10
+  sprintf("\n# Recomendations: %d", dim(recom_result)[1]) %>% cat()
+  
+  lapply(1:num_rows, function(i) {
+    list(fluidRow(lapply(1:num_movies_row, function(j) {
+      idx = (i - 1) * num_movies_row + j
+      movie = movies[movies$MovieID == recom_result[idx, ]$MovieID,]
+      #print(movie)
+      box(width = 2, status = "success", solidHeader = TRUE, 
+          title = paste0("Rank ", idx),
+          
+          div(style = "text-align:center", 
+              a(img(src = movie$image_url, 
+                    height = 150))
+          ),
+          div(style="text-align:center; font-size: 100%", 
+              strong(movie$Title)
+          )
+          
+      )        
+    }))) # columns
+  }) # rows  
+}
+
 shinyServer(function(input, output, session) {
+
+  # show the list of genres
+  output$genres <- renderUI({
+    genres = get_genres(movies)
+    selectInput("genre_sel", "Choose a genre:", genres)    
+  })
+  
+  df2 <- eventReactive(input$btng, {
+    withBusyIndicatorServer("btng", {
+      
+      preds = top.genre[top.genre$Genres == input$genre_sel,]
+      #preds[1,]$Title
+    })
+  })
+  
+  output$resultsg <- renderUI({
+    recom_result <- df2()
+    #print(recom_result$Title)
+    
+    render_results(recom_result)
+  }) 
   
   # show the books to be rated
   output$ratings <- renderUI({
@@ -37,10 +83,17 @@ shinyServer(function(input, output, session) {
     
     lapply(1:num_rows, function(i) {
       list(fluidRow(lapply(1:num_movies, function(j) {
+        idx = (i - 1) * num_movies + j
         list(box(width = 2,
-                 div(style = "text-align:center", img(src = s.movies$image_url[(i - 1) * num_movies + j], height = 150)),
-                 div(style = "text-align:center", strong(s.movies$Title[(i - 1) * num_movies + j])),
-                 div(style = "text-align:center; font-size: 150%; color: #f0ad4e;", ratingInput(paste0("select_", s.movies$MovieID[(i - 1) * num_movies + j]), label = "", dataStop = 5)))) #00c0ef
+                 div(style = "text-align:center", 
+                     img(src = s.movies$image_url[idx], 
+                         height = 150)),
+                 div(style = "text-align:center", 
+                     strong(s.movies$Title[idx])),
+                 div(style = "text-align:center; font-size: 150%; color: #f0ad4e;", 
+                     ratingInput(paste0("select_", 
+                                        s.movies$MovieID[idx]), 
+                                 label = "", dataStop = 5)))) #00c0ef
       })))
     })
   })
@@ -63,12 +116,12 @@ shinyServer(function(input, output, session) {
       recom_results <- data.table(Rank = preds$Rank, 
                                   MovieID = preds$MovieID, 
                                   Title = preds$Title, 
-                                  Predicted_rating = preds$Rating)
+                                  Predicted_rating = preds$Rating
+                                  )
       
     }) # still busy
     
   }) # clicked on button
-  
   
   # display the recommendations
   output$results <- renderUI({
@@ -76,21 +129,7 @@ shinyServer(function(input, output, session) {
     num_movies <- 5
     recom_result <- df()
     
-    lapply(1:num_rows, function(i) {
-      list(fluidRow(lapply(1:num_movies, function(j) {
-        box(width = 2, status = "success", solidHeader = TRUE, title = paste0("Rank ", (i - 1) * num_movies + j),
-            
-            div(style = "text-align:center", 
-                a(img(src = movies$image_url[recom_result$MovieID[(i - 1) * num_movies + j]], height = 150))
-            ),
-            div(style="text-align:center; font-size: 100%", 
-                strong(movies$Title[recom_result$MovieID[(i - 1) * num_movies + j]])
-            )
-            
-        )        
-      }))) # columns
-    }) # rows
-    
+    render_results(recom_result)
   }) # renderUI function
   
 }) # server function

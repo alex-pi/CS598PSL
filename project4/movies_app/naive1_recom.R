@@ -14,7 +14,7 @@ naive1_recom = function(user_ratings, movies) {
     arrange(Genres, desc(AvgRating))
   top_movies_per_genre = movies_avg_ratings %>% 
     group_by(Genres) %>% 
-    slice_max(order_by = AvgRating, n = 5)
+    slice_max(order_by = AvgRating, n = 10)
   
   top_movies_per_genre = left_join(top_movies_per_genre, 
                                    movies[,c("MovieID", "Title", "Year")], 

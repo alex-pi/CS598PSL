@@ -1,6 +1,4 @@
 
-myurl = "https://liangfgithub.github.io/MovieData/"
-
 path_resolver = (function(isRemote=TRUE) {
   small_image_url = "https://liangfgithub.github.io/MovieImages/"
   small_image_path = "MovieImages/"
@@ -81,11 +79,32 @@ get_genres = function(movies) {
     distinct_genres = union(split_genres, distinct_genres)
   } 
   
-  return(distinct_genres)
+  return(sort(distinct_genres))
+}
+
+get_top_by_genre = function(movies) {
+  movies_ratings = left_join(movies, ratings, by = "MovieID")
+  movies_avg_ratings = movies_ratings %>% 
+    group_by(MovieID) %>% 
+    summarise_at(vars(Rating), list(AvgRating = mean))
+  
+  movies_avg_ratings = left_join(movies_avg_ratings, 
+                                 movies[,c("MovieID", "Genres")], by = "MovieID")
+  movies_avg_ratings = movies_avg_ratings %>% 
+    separate_rows(Genres, sep='\\|') %>% 
+    arrange(Genres, desc(AvgRating))
+  top_movies_per_genre = movies_avg_ratings %>% 
+    group_by(Genres) %>% 
+    slice_max(order_by = AvgRating, n = 10)
+  
+  top_movies_per_genre = left_join(top_movies_per_genre, 
+                                   movies[,c("MovieID", "Title", "Year")], 
+                                   by = "MovieID")
 }
 
 movies = get_movies_data()
 ratings = get_ratings_data()
 users = get_users_data()
+top.genre = get_top_by_genre(movies)
 
 
