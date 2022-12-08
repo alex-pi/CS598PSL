@@ -5,371 +5,460 @@ date: "11/27/2022"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+{r setup, include=FALSE}
+knitr::opts_chunk$set( echo = TRUE )
 
-```{r}
-library(dplyr)
-library(ggplot2)
-library(recommenderlab)
-library(DT)
-library(data.table)
-library(reshape2)
-library(hash)
-library(tidyverse)
-library(Matrix)
-library(proxy)
-```
+{r}
+library( dplyr )
+library( ggplot2 )
+library( recommenderlab )
+library( DT )
+library( data.table )
+library( reshape2 )
+library( hash )
+library( tidyverse )
+library( Matrix )
+library( proxy )
 
-## System I: Recommendation based on genres
+System I: Recommendation based on movie genre
 
-```{r}
- myurl = "https://liangfgithub.github.io/MovieData/"
+Read data and store in a table
 
+{r}
+myurl = "https://liangfgithub.github.io/MovieData/"
 
 # use colClasses = 'NULL' to skip columns
-ratings = read.csv(paste0(myurl, 'ratings.dat?raw=true'), 
-                   sep = ':',
-                   colClasses = c('integer', 'NULL'), 
-                   header = FALSE)
-colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
-```
+ratings = read.csv(
+  paste0( myurl, 'ratings.dat?raw=true' ), 
+  sep = ':',
+  colClasses = c( 'integer', 'NULL'), 
+  header = FALSE 
+)
 
+colnames( ratings ) = c( 'UserID', 'MovieID', 'Rating', 'Timestamp' )
 
-```{r}
-movies = readLines(paste0(myurl, 'movies.dat?raw=true'))
-movies = strsplit(movies, split = "::", fixed = TRUE, useBytes = TRUE)
-movies = matrix(unlist(movies), ncol = 3, byrow = TRUE)
-movies = data.frame(movies, stringsAsFactors = FALSE)
-colnames(movies) = c('MovieID', 'Title', 'Genres')
-movies$MovieID = as.integer(movies$MovieID)
+Clean and organize the data in preparation for learning.
+
+{r}
+movies = readLines( paste0( myurl, 'movies.dat?raw=true' ) )
+movies = strsplit( movies, split = "::", fixed = TRUE, useBytes = TRUE )
+movies = matrix( unlist(movies), ncol = 3, byrow = TRUE )
+movies = data.frame( movies, stringsAsFactors = FALSE )
+colnames( movies ) = c( 'MovieID', 'Title', 'Genres' )
+movies$MovieID     = as.integer( movies$MovieID )
 
 # convert accented characters
 movies$Title[73]
-movies$Title = iconv(movies$Title, "latin1", "UTF-8")
+movies$Title = iconv( movies$Title, "latin1", "UTF-8" )
 movies$Title[73]
 
 # extract year
-movies$Year = as.numeric(unlist(
-  lapply(movies$Title, function(x) substr(x, nchar(x)-4, nchar(x)-1))))
-```
+movies$Year = as.numeric( 
+  unlist(
+    lapply( movies$Title, function(x) substr( x, nchar(x) - 4, nchar(x) - 1 ) )
+  )
+)
 
+{r}
+users = read.csv( paste0( myurl, 'users.dat?raw=true' ), sep=':', header=FALSE )
+users = users[, -c(2,4,6,8) ]    # skip columns
+colnames(users) = c( 'UserID', 'Gender', 'Age', 'Occupation', 'Zip-code' )
 
-```{r}
-users = read.csv(paste0(myurl, 'users.dat?raw=true'),
-                 sep = ':', header = FALSE)
-users = users[, -c(2,4,6,8)] # skip columns
-colnames(users) = c('UserID', 'Gender', 'Age', 'Occupation', 'Zip-code')
-```
+Version 1: Naive Approach
 
-## System I: Recommendation based on genres - Version 1: Naive Approach
+A simple approach to recommending movies would be to average the user's ratings on a per-genre basis. We select the genre with the highest rating given and suggest popular movies from that genre.
 
-A simple approach to recommending movies would be to average the individual's ratings on a per-genre basis. From this, we may select the genre with the highest rating given and suggest popular movies from that genre.
+First, we must collect information about all the different genre types
 
-First, we need to collect information about all the different genre types
-
-```{r}
+{r}
 genres_col = movies$Genres
 distinct_genres = c()
-for (i in 1:length(genres_col)) {
+
+for ( i in 1:length( genres_col ) ) {
   single_genre_set = genres_col[i]
-  split_genres = unlist(strsplit(single_genre_set, "|", fixed=TRUE))
-  distinct_genres = union(split_genres, distinct_genres)
+  split_genres     = unlist( strsplit( single_genre_set, "|", fixed=TRUE ) )
+  distinct_genres  = union( split_genres, distinct_genres )
 }
-```
 
-Next, we need to define our 'popular' movies for each genre. In this case, our definition will be movies with the highest ratings for each genre with a minimum of 5 ratings
+Next, we define 'popular' for each genre as the highest rated movies with at least 5 ratings.
 
-```{r}
-movies_ratings = left_join(movies, ratings, by = "MovieID")
-movies_ratings = movies_ratings %>% group_by(MovieID) %>% filter(n() >= 5)
-movies_avg_ratings = movies_ratings %>% group_by(MovieID) %>% summarise_at(vars(Rating), list(AvgRating = mean))
-movies_avg_ratings = left_join(movies_avg_ratings, movies[,c("MovieID", "Genres")], by = "MovieID")
-movies_avg_ratings = movies_avg_ratings %>% separate_rows(Genres, sep='\\|') %>% arrange(Genres, desc(AvgRating))
-top_movies_per_genre = movies_avg_ratings %>% group_by(Genres) %>% slice_max(order_by = AvgRating, n = 5)
-top_movies_per_genre = left_join(top_movies_per_genre, movies[,c("MovieID", "Title", "Year")], by = "MovieID")
-```
+{r}
+movies_ratings = left_join( movies, ratings, by="MovieID" )
+movies_ratings = movies_ratings %>% 
+  group_by( MovieID ) %>% 
+  filter( n() >= 5 )
 
-We can then test this approach with a user's ratings. 
+movies_avg_ratings = movies_ratings %>% 
+  group_by( MovieID ) %>% 
+  summarise_at( vars( Rating ), list( AvgRating = mean ) )
 
-```{r}
-ratings_user1 = ratings[which(ratings$UserID == 1),]
-ratings_user1 = left_join(ratings_user1, movies, by = "MovieID")
-ratings_user1 = ratings_user1 %>% separate_rows(Genres, sep='\\|') %>% group_by(Genres) %>% summarise_at(vars(Rating), list(AvgRating = mean)) %>% slice_max(order_by = AvgRating, n = 1)
+movies_avg_ratings = left_join( 
+  movies_avg_ratings, 
+  movies[, c( "MovieID", "Genres" ) ], 
+  by = "MovieID" 
+)
+movies_avg_ratings = movies_avg_ratings %>% 
+  separate_rows( Genres, sep='\\|' ) %>% 
+  arrange( Genres, desc( AvgRating ) )
+
+top_movies_per_genre = movies_avg_ratings %>% 
+  group_by( Genres ) %>% 
+  slice_max( order_by=AvgRating, n=5 )
+
+top_movies_per_genre = left_join( 
+  top_movies_per_genre, 
+  movies[, c( "MovieID", "Title", "Year")], 
+  by = "MovieID"
+)
+
+We test this approach with a user's ratings.
+
+{r}
+ratings_user1 = ratings[ which( ratings$UserID == 1 ), ]
+ratings_user1 = left_join( ratings_user1, movies, by="MovieID" )
+ratings_user1 = ratings_user1 %>% 
+  separate_rows( Genres, sep='\\|') %>% 
+  group_by( Genres ) %>% 
+  summarise_at( vars( Rating ), list( AvgRating = mean ) ) %>%
+  slice_max( order_by=AvgRating, n=1 )
+
 top_genre_user1 = ratings_user1$Genres
-```
 
-In this case, we see that the top genre for this user is `top_genre_user1`. We then suggest the following top 5 most popular movies for this genre:
+The top genre for this user is top_genre_user1 for which we suggest the 5 most popular movies:
 
-```{r}
-top_movies_per_genre %>% filter(Genres == top_genre_user1)
-```
+{r}
+top_movies_per_genre %>% filter( Genres == top_genre_user1 )
 
-## System I: Recommendation based on genres - Version 2: User-Normalized Ratings
+Version 2: User-Normalized Ratings
 
-The previous naive approach for recommendations, though somewhat effective, works on the assumption that all individuals give ratings on the same scale. That is to say, individuals who enjoy a movie or genre to an identical degree would both give the same exact rating. However, this is often not the case. Individuals may often give a more skewed set of ratings for all movies they have seen. Because of this fact, it can be beneficial to normalize the set of ratings for users to ensure the composition of all ratings is more reliable.
+A limitation of the naive approach is it assumes users rate movies using the same criteria (i.e. users who enjoy a movie or genre to an identical degree would give the same rating). It is not uncommon for users to have different interpretations even when using the same scoring system, and the differences introduce bias to the ratings for movies they have seen. Therefore, it's often beneficial to normalize the user's set of ratings to calibrate them to a common standard so the composition of all ratings is more consistent.
 
+(original): The previous naive approach for recommendations, though somewhat effective, works on the assumption that all individuals give ratings on the same scale. That is to say, individuals who enjoy a movie or genre to an identical degree would both give the same exact rating. However, this is often not the case. Individuals may often give a more skewed set of ratings for all movies they have seen. Because of this fact, it can be beneficial to normalize the set of ratings for users to ensure the composition of all ratings is more reliable.
 
-```{r}
-movies_ratings = left_join(movies, ratings, by = "MovieID")
-movies_ratings = movies_ratings %>% filter(!is.na(UserID)) 
-movies_ratings_avgs = movies_ratings %>% group_by(UserID) %>% summarise_at(vars(Rating), list(AvgRating = mean))
-movies_ratings = left_join(movies_ratings, movies_ratings_avgs, by = "UserID")
-movies_ratings = movies_ratings %>% mutate(NormalizedRating = Rating-AvgRating)
-```
+{r}
+movies_ratings = left_join( movies, ratings, by="MovieID" )
+movies_ratings = movies_ratings %>% filter( !is.na( UserID ) ) 
+movies_ratings_avgs = movies_ratings %>% 
+  group_by( UserID ) %>% 
+  summarise_at( vars( Rating ), list( AvgRating = mean ) )
 
-At this point, we now have a set of ratings that are normalized with respect to the individual's mean rating value.
+movies_ratings = left_join( movies_ratings, movies_ratings_avgs, by="UserID" )
+movies_ratings = movies_ratings %>% mutate( NormalizedRating = Rating - AvgRating )
 
-```{r}
-movies_ratings = movies_ratings %>% group_by(MovieID) %>% filter(n() >= 5)
-movies_avg_ratings = movies_ratings %>% group_by(MovieID) %>% summarise_at(vars(NormalizedRating), list(AvgRating = mean))
-movies_avg_ratings = left_join(movies_avg_ratings, movies[,c("MovieID", "Genres")], by = "MovieID")
-movies_avg_ratings = movies_avg_ratings %>% separate_rows(Genres, sep='\\|') %>% arrange(Genres, desc(AvgRating))
-top_movies_per_genre = movies_avg_ratings %>% group_by(Genres) %>% slice_max(order_by = AvgRating, n = 5)
-top_movies_per_genre = left_join(top_movies_per_genre, movies[,c("MovieID", "Title", "Year")], by = "MovieID")
-```
+We now have a set of ratings normalized with respect to the user's mean rating value.
 
-We can then test this approach with a user's ratings. 
+{r}
 
-```{r}
-ratings_user1 = ratings[which(ratings$UserID == 1),]
-ratings_user1 = left_join(ratings_user1, movies, by = "MovieID")
-ratings_user1 = ratings_user1 %>% separate_rows(Genres, sep='\\|') %>% group_by(Genres) %>% summarise_at(vars(Rating), list(AvgRating = mean)) %>% slice_max(order_by = AvgRating, n = 1)
+movies_ratings = movies_ratings %>% 
+  group_by( MovieID ) %>% 
+  filter( n() >= 5 )
+
+movies_avg_ratings = movies_ratings %>% 
+  group_by( MovieID ) %>% 
+  summarise_at( vars( NormalizedRating ), list( AvgRating = mean ) )
+
+movies_avg_ratings = left_join( 
+  movies_avg_ratings, 
+  movies[, c( "MovieID", "Genres" ) ], 
+  by = "MovieID"
+)
+
+movies_avg_ratings = movies_avg_ratings %>% 
+  separate_rows( Genres, sep='\\|') %>% 
+  arrange( Genres, desc( AvgRating ) )
+
+top_movies_per_genre = movies_avg_ratings %>% 
+  group_by( Genres ) %>% 
+  slice_max( order_by=AvgRating, n=5 )
+
+top_movies_per_genre = left_join( 
+  top_movies_per_genre, 
+  movies[, c( "MovieID", "Title", "Year" ) ], 
+  by = "MovieID"
+)
+
+Choosing a user from the set, we test the approach with a user's ratings.
+
+{r}
+ratings_user1 = ratings[ which( ratings$UserID == 1 ), ]
+ratings_user1 = left_join( ratings_user1, movies, by="MovieID" )
+ratings_user1 = ratings_user1 %>% 
+  separate_rows( Genres, sep='\\|' ) %>% 
+  group_by( Genres ) %>% 
+  summarise_at( vars( Rating ), list( AvgRating=mean ) ) %>% 
+  slice_max( order_by=AvgRating, n=1 )
+
 top_genre_user1 = ratings_user1$Genres
-```
 
-In this case, we see that the top genre for this user is `top_genre_user1`. We then suggest the following top 5 most popular movies for this genre:
+top_genre_user1 is the top genre for this user, for which we suggest the 5 most popular movies.
 
-```{r}
-top_movies_per_genre %>% filter(Genres == top_genre_user1)
-```
+{r}
+top_movies_per_genre %>% filter( Genres == top_genre_user1 )
 
-## System II: UBCF
+System II: Collaborative Filtering Models
 
-These next few models represent a more complex set of approaches to recommending movies to a user. This first of these models is a User-Based Content Filtering (UBCF) model. This model utilizes a nearest-neighbors approach between users to give recommendations.
+In this section we explore movie recommendation using more complex models based on collaborative filtering. Collaborative filtering is a method of cross referencing data-in-common for specified attributes, then ranking it according to a similarity score. This first model is User-Based Collaborative Filtering (UBCF), a memory-based algorithm which utilizes a nearest-neighbors approach between users to give recommendations. The second model is Item-Based Collaborative Filtering (IBCF), a model-based algorithm which operates similar to UBCF in many ways, but measures similarity between movies instead of users while operating on a subset of the data for better scalability.
+
+Ratings are stored in a u x m matrix R where each row (u) represents a user, and each column (m) a movie. Each entry R[u,m] is a rating in range [1…5] issued by user u for movie m, or NA if the user has not yet rated the movie.
+
+Both models define an active user to whom recommendations are aimed, and collect a neighborhood of movies and/or users based on similarity scores obtained from the ratings matrix. The similarity scores are computed from attributes-in-common between the active user and all other users under consideration, and used to rank and identify movies to recommend to the active user.
+
+User-Based Content Filtering (UBCF)
+
+The premise of this model is users who issued similar ratings for movies-in-common with the active user will rate other movies similarly and therefore can recommend their highest rated movies which the active user has not yet seen.
+
+To demonstrate, we use the same data as used in the System I models, but limit training data to the first 500 rows (users), and designate a single row from the remaining data as the active user.
+
+(original): These next few models represent a more complex set of approaches to recommending movies to a user. This first of these models is a User-Based Content Filtering (UBCF) model. This model utilizes a nearest-neighbors approach between users to give recommendations.
 
 To set up our demonstration of this model, we first set up the test and training data. The data is the same set as used before, though we limit our training data to the first 500 rows (users) while still using the full range of movies and their ratings given by each user.
 
-```{r}
-library(recommenderlab)
+{r}
+library( recommenderlab )
+
 myurl = "https://liangfgithub.github.io/MovieData/"
-ratings = read.csv(paste0(myurl, 'ratings.dat?raw=true'), 
-                   sep = ':',
-                   colClasses = c('integer', 'NULL'), 
-                   header = FALSE)
-colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
-i = paste0('u', ratings$UserID)
-j = paste0('m', ratings$MovieID)
-x = ratings$Rating
-tmp = data.frame(i, j, x, stringsAsFactors = T)
-Rmat = sparseMatrix(as.integer(tmp$i), as.integer(tmp$j), x = tmp$x)
-rownames(Rmat) = levels(tmp$i)
-colnames(Rmat) = levels(tmp$j)
-Rmat = new('realRatingMatrix', data = Rmat)
 
-train = Rmat[1:500, ]
-test = Rmat[501, ]
-```
+ratings = read.csv(
+  paste0( myurl, 'ratings.dat?raw=true' ), 
+  sep = ':',
+  colClasses = c( 'integer', 'NULL'), 
+  header = FALSE
+)
 
-For convenience, data is cloned.
+colnames( ratings ) = c( 'UserID', 'MovieID', 'Rating', 'Timestamp' )
 
-```{r}
+i    = paste0( 'u', ratings$UserID  )
+j    = paste0( 'm', ratings$MovieID )
+x    = ratings$Rating
+tmp  = data.frame( i, j, x, stringsAsFactors = T )
+Rmat = sparseMatrix( as.integer( tmp$i ), as.integer( tmp$j ), x = tmp$x )
+rownames( Rmat ) = levels( tmp$i )
+colnames( Rmat ) = levels( tmp$j )
+Rmat = new( 'realRatingMatrix', data = Rmat )
+
+train = Rmat[ 1:500, ]
+test  = Rmat[ 501,   ]
+
+For convenience, the data is cloned.
+
+{r}
 mytrain = train
-mytest = test
-```
+mytest  = test
 
-In the first step for this type of model, data is normalized. Similar to before, all users have their own tendencies to rate on average higher or lower. These averages are taken into consideration and means are set to zero across each user's ratings.
+The first step is to normalize the data as users tend to rate movies according to their own methodology. Users with similar opinion will not necessarily assign the same numeric value as a rating. To reduce bias, each user's ratings are centered on the mean of their ratings set.(original): In the first step for this type of model, data is normalized. Similar to before, all users have their own tendencies to rate on average higher or lower. These averages are taken into consideration and means are set to zero across each user's ratings.
 
-```{r}
+{r}
 # Step 1: Normalize both the train and test datasets
-mytrain = normalize(mytrain, method="center", row=TRUE)
-test_mean = rowMeans(mytest)
-mytest = normalize(mytest, method="center", row=TRUE)
-```
+mytrain   = normalize( mytrain, method="center", row=TRUE )
+test_mean = rowMeans( mytest )
+mytest    = normalize( mytest, method="center", row=TRUE )
 
-The similarity vector is computed. The cosine similarity is calculated between every user with respect to their ratings and stored in this vector. For example, users with identically matching ratings across movies both users have rated will have a similarity of 1, whereas users with vastly different ratings for movies both users have rated will have significantly lower similarities. From the set of similarities, the top n (20 in this case) most similar users are selected to base recommendations on.
+The similarity vector is computed using cosine similarity which is calculated between the active user and every other user, but only for movies which they have rated in common. Resulting values are defined in the interval [0…1]. Users with identical ratings across movies-in-common with the active user will have similarity value of 1, whereas users with vastly different ratings will have significantly lower similarity. Recommendations are based on a neighborhood of N most similar users. We defined N = 20.(original): The similarity vector is computed. The cosine similarity is calculated between every user with respect to their ratings and stored in this vector. For example, users with identically matching ratings across movies both users have rated will have a similarity of 1, whereas users with vastly different ratings for movies both users have rated will have significantly lower similarities. From the set of similarities, the top n (20 in this case) most similar users are selected to base recommendations on.
 
-```{r}
+{r}
 # Step 2: Similarity
-sim = similarity(mytrain, mytest, method = 'cosine', which = "users")
+sim = similarity( mytrain, mytest, method='cosine', which="users" )
 
-# Step 3: Top 20
-top_20_similarity_values = tail(sort(sim),20)
-top_20_lower_bound = top_20_similarity_values[1]
-top_20_by_similarity_indexes = which(sim >= top_20_lower_bound)
-```
+# Step 3: Top N
+N = 20
+top_20_similarity_values     = tail( sort( sim ), N )
+top_20_lower_bound           = top_20_similarity_values[1]
+top_20_by_similarity_indexes = which( sim >= top_20_lower_bound )
 
-To improve predictions, we opt to implement weighting for the UBCF model's predicted ratings for the test user Each Similarity value is multiplied by each rating for each of the respective users. Then, ratings are taken by summing up the product of this multiplication step and the summation is scaled back with respect to the sum of all similarities. By doing this, we are acknowledging that the tested user is more likely to rate movies according to how they were rating by users whom they have high similarity values with. 
+By recognizing some users are more similar to the active user than others, the similarities can be treated as weights to adjust the amount of influence a user's rating has on the recommendation. This is accomplished by multiplying the similarities with ratings of the users in the neighborhood, summing their modified ratings for each movie, then dividing by the sum of the similarities. The result is an estimate of the ratings the active user is predicted to assign to the movies.(original): To improve predictions, we opt to implement weighting for the UBCF model's predicted ratings for the test user Each Similarity value is multiplied by each rating for each of the respective users. Then, ratings are taken by summing up the product of this multiplication step and the summation is scaled back with respect to the sum of all similarities. By doing this, we are acknowledging that the tested user is more likely to rate movies according to how they were rating by users whom they have high similarity values with.
 
-```{r}
+{r}
 # Step 4: Compute weighted average
-top_20_similar_users_ratings = mytrain[top_20_by_similarity_indexes]
-weights_vec = as(sim[top_20_by_similarity_indexes], "matrix")
-weights = matrix(weights_vec, nrow=20, ncol=3706)
-top_20_similar_users_ratings_weighted = as(top_20_similar_users_ratings, "matrix")*weights
-mysums = colSums(is.na(top_20_similar_users_ratings_weighted))
-na_idxs = which(mysums == 20)
+top_20_similar_users_ratings = mytrain[ top_20_by_similarity_indexes ]
+
+weights_vec = as( sim[ top_20_by_similarity_indexes ], "matrix" )
+weights     = matrix( weights_vec, nrow=N, ncol=3706 )
+top_20_similar_users_ratings_weighted = weights * as( top_20_similar_users_ratings, "matrix" )
+
+mysums = colSums( is.na( top_20_similar_users_ratings_weighted ) )
+na_idxs = which( mysums == N )
 weights_nas_removed = weights
-weights_nas_removed[is.na(top_20_similar_users_ratings_weighted)] = NA
-averaged_ratings_for_top_20_similar_users = colSums(top_20_similar_users_ratings_weighted, na.rm = TRUE)/colSums(weights_nas_removed, na.rm = TRUE)
-averaged_ratings_for_top_20_similar_users[na_idxs] = NA 
-```
+weights_nas_removed[ is.na( top_20_similar_users_ratings_weighted ) ] = NA
 
-Finally, the ratings are set to NA in our output vector for movies that the test user had already rated. Additionally, the test user's original ratings average is added back to the outputted vector of predicted ratings.
+averaged_ratings_for_top_20_similar_users = 
+  colSums( top_20_similar_users_ratings_weighted, na.rm = TRUE ) / 
+  colSums( weights_nas_removed, na.rm = TRUE )
 
-```{r}
+averaged_ratings_for_top_20_similar_users[ na_idxs ] = NA 
+
+The estimate contains predictions for all movies from users in the neighborhood - including movies already rated by the active user. To remedy the issue, movies in the estimate already rated by the active user are set to NA, while the rating means computed in the normalization step are restored.
+
+(original): Finally, the ratings are set to NA in our output vector for movies that the test user had already rated. Additionally, the test user's original ratings average is added back to the outputted vector of predicted ratings.
+
+{r}
 # Step 5: Replace with NAs where already rated, add back user's mean
-tmp.y = as.vector(as(mytest, "matrix"))
-ind.y = which(!is.na(tmp.y))
-averaged_ratings_for_top_20_similar_users[ind.y] = NA
-averaged_ratings_for_top_20_similar_users = averaged_ratings_for_top_20_similar_users + test_mean
+tmp.y = as.vector( as( mytest, "matrix" ) )
+ind.y = which( !is.na(tmp.y ) )
+averaged_ratings_for_top_20_similar_users[ ind.y ] = NA
+averaged_ratings_for_top_20_similar_users = test_mean +
+  averaged_ratings_for_top_20_similar_users
+
 mypred = averaged_ratings_for_top_20_similar_users
-```
 
-At this point, our UBCF model is complete and can be compared to recommenderlab's UBCF model with the same parameters. 
+Our UBCF model is now complete and can be compared to the recommenderlab UBCF model with the same parameters.
 
-```{r}
-recommender.UBCF <- Recommender(train, method = "UBCF",
-                                parameter = list(normalize = 'center', 
-                                                 method = 'Cosine', 
-                                                 nn = 20))
+{r}
+recommender.UBCF <- Recommender(
+  train, 
+  method = "UBCF",
+  parameter = list( normalize = 'center', method = 'Cosine', nn = 20 )
+)
 
-p.UBCF <- predict(recommender.UBCF, test, type="ratings")
-p.UBCF <- as.numeric(as(p.UBCF, "matrix"))
+p.UBCF <- predict( recommender.UBCF, test, type="ratings" )
+p.UBCF <- as.numeric( as( p.UBCF, "matrix" ) )
 
-sum(is.na(p.UBCF) != is.na(mypred)) ### should be zero
-max(abs(p.UBCF - mypred), na.rm = TRUE)  ### should be less than 1e-06 
-```
+sum( is.na( p.UBCF ) != is.na( mypred ) )        # should be zero
+max( abs( p.UBCF - mypred ), na.rm = TRUE )      # should be less than 1e-06 
 
-In order to properly suggest movies to the user, the top 5 rated movies from the model can be selected and outputted.
+The top 5 rated movies from the model are selected and returned.
 
-```{r}
-top_5_movies = tail(sort(mypred),5)
-top_5_movies = row.names(as(top_5_movies, "matrix"))
-top_5_movies = strtoi(gsub('m','',top_5_movies))
-top_5_recommended_movies_UBCF = movies %>% filter(MovieID %in% top_5_movies)
+{r}
+top_5_movies = tail( sort( mypred ),5 )
+top_5_movies = row.names( as( top_5_movies, "matrix" ) )
+top_5_movies = strtoi( gsub( 'm', '', top_5_movies ) )
+top_5_recommended_movies_UBCF = movies %>% filter( MovieID %in% top_5_movies )
 top_5_recommended_movies_UBCF
 
-```
 
-## System II: IBCF
+Item-Based Content Filtering (IBCF):
 
-This second models is a Item-Based Content Filtering (IBCF) model. This model utilizes a nearest-neighbors approach between users to give recommendations, similar to the UBCF model.
+The premise of this model is the active user will prefer movies which are rated similar (by other users) to movies they like.
+
+IBCF is a model-based algorithm where the recommendation is based on a subset of the original data allowing it to scale better than the memory-based algorithm of UBCF, but at the risk of potentially sacrificing quality. The algorithm employs a two pass system where the first pass generates the subset of N movies to consider, and the second pass measures similarity of the N movies to the active user's rated movies.
+
+Using the same data set, we limit the training data to the first 500 rows (users) and designate the 501st row as the active user.
+
+(original): This second models is a Item-Based Content Filtering (IBCF) model. This model utilizes a nearest-neighbors approach between users to give recommendations, similar to the UBCF model.
 
 Again, we set up our training and test data with the first 500 users as the training data and the 501th user as the test data while still using the full range of movies and their ratings given by each user.
 
-```{r}
-library(recommenderlab)
+{r}
+library( recommenderlab )
 myurl = "https://liangfgithub.github.io/MovieData/"
-ratings = read.csv(paste0(myurl, 'ratings.dat?raw=true'), 
-                   sep = ':',
-                   colClasses = c('integer', 'NULL'), 
-                   header = FALSE)
-colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
-i = paste0('u', ratings$UserID)
-j = paste0('m', ratings$MovieID)
+ratings = read.csv(
+  paste0( myurl, 'ratings.dat?raw=true' ), 
+  sep = ':',
+  colClasses = c( 'integer', 'NULL'), 
+  header = FALSE 
+)
+
+colnames( ratings ) = c( 'UserID', 'MovieID', 'Rating', 'Timestamp' )
+i = paste0( 'u', ratings$UserID  )
+j = paste0( 'm', ratings$MovieID )
 x = ratings$Rating
-tmp = data.frame(i, j, x, stringsAsFactors = T)
-Rmat = sparseMatrix(as.integer(tmp$i), as.integer(tmp$j), x = tmp$x)
-rownames(Rmat) = levels(tmp$i)
-colnames(Rmat) = levels(tmp$j)
-Rmat = new('realRatingMatrix', data = Rmat)
+tmp = data.frame( i, j, x, stringsAsFactors = T )
+Rmat = sparseMatrix( as.integer( tmp$i ), as.integer( tmp$j ), x = tmp$x )
+rownames( Rmat ) = levels( tmp$i )
+colnames( Rmat ) = levels( tmp$j )
+Rmat = new( 'realRatingMatrix', data = Rmat )
 
 train = Rmat[1:500, ]
-test = Rmat[501, ]
-```
+test  = Rmat[501,   ]
 
 For convenience, data is cloned.
 
-```{r}
+{r}
 mytrain = train
-mytest = test
-```
+mytest  = test
 
-Once again, data is normalized. Similar to before, all users have their own tendencies to rate on average higher or lower. These averages are taken into consideration and means are set to zero across each user's ratings.
+Data is normalized to reduce bias from idiosyncrasies in each user's rating methodology. Each user's ratings are centered on the mean of their rating set.
 
-```{r}
+(original): Once again, data is normalized. Similar to before, all users have their own tendencies to rate on average higher or lower. These averages are taken into consideration and means are set to zero across each user's ratings.
+
+{r}
 # Step 1: Normalize both the train and test datasets
-mytrain = normalize(mytrain, method="center", row=TRUE)
-test_mean = rowMeans(mytest)
-mytest = normalize(mytest, method="center", row=TRUE)
-```
+mytrain   = normalize( mytrain, method="center", row=TRUE )
+test_mean = rowMeans( mytest )
+mytest    = normalize( mytest, method="center", row=TRUE )
 
-The similarity vector is then computed. This similarity vector is resembles the one used in the UBCF model. However, in this model, the cosine similarity is calculated between each pair of movies by taking into consideration all ratings. When all users rate a pair of movies similarly, they get a high similarity value.
+The similarity vector is computed and resembles the one used in the UBCF model, but the cosine similarity is calculated between each pair of movies by taking all ratings into consideration. Similarity scores are highest when all users rate a pair of movies identically, and lowest when ratings vary greatly.
 
-```{r}
+(original): The similarity vector is then computed. This similarity vector is resembles the one used in the UBCF model. However, in this model, the cosine similarity is calculated between each pair of movies by taking into consideration all ratings. When all users rate a pair of movies similarly, they get a high similarity value.
+
+{r}
 # Step 2: Compute similarities
-sim1 = proxy::simil(as(mytrain, "matrix"), by_rows = FALSE, method = "cosine")
-sim1 = (1 + sim1)/2
-sim=as(sim1, "matrix")
-```
+sim1 = proxy::simil( as( mytrain, "matrix" ), by_rows=FALSE, method="cosine" )
+sim1 = ( 1 + sim1 ) / 2
+sim  = as( sim1, "matrix" )
 
-Now that similarities between pairs of movies are computed, we retain only the highest scoring similarity values and eliminate the lower similarity scores. We retain only the similarities for the 30 most similarly rated movies.
+The scores in the similarity vector are used to select the neighborhood of N most similar movie pairs. We defined N = 30.
 
-```{r}
+(original): Now that similarities between pairs of movies are computed, we retain only the highest scoring similarity values and eliminate the lower similarity scores. We retain only the similarities for the 30 most similarly rated movies.
+
+{r}
 # Step 3: Get top 30 similarities for each movie
-sim_mat = matrix(NA, 3706, 3706)
-for (i in 1:3706)
+N = 30
+sim_mat = matrix( NA, 3706, 3706 )
+
+for ( i in 1:3706 )
 {
   tmp.x = as.vector(sim[i, ])
-  tmp.x[is.na(tmp.x)] = 0
-  top_30_by_similarity_indexes = tail(order(tmp.x, decreasing = FALSE), 30)
-  sim_mat[i,top_30_by_similarity_indexes] = tmp.x[top_30_by_similarity_indexes]
+  tmp.x[ is.na( tmp.x ) ] = 0
+  top_30_by_similarity_indexes = tail( order( tmp.x, decreasing = FALSE ), N )
+  sim_mat[ i, top_30_by_similarity_indexes ] = tmp.x[ top_30_by_similarity_indexes]
 }
-```
 
-The model then makes predictions about the test user's future ratings based on the user's existing ratings. This is done in a weighted manner by multiplying a vector of similarities by the existing ratings, summing up these products, and scaling them with respect to the utilized similarities.
+Inspection of the movie neighborhood reveals some movie ratings will exhibit more similarity to the active user's movie ratings than others. Multiplying the similarity vector with each movie's ratings de-emphasizes those which exhibit lesser degree of similarity. Each movie's ratings are then summed, then divided by the sum of the similarities used to produce a vector of estimated movie ratings (i.e. the prediction).
 
-```{r}
+(original): The model then makes predictions about the test user's future ratings based on the user's existing ratings. This is done in a weighted manner by multiplying a vector of similarities by the existing ratings, summing up these products, and scaling them with respect to the utilized similarities.
+
+{r}
 # Step 4: Make weighted predictions based on the user's existing ratings about future ratings
-tmp.y = as.vector(as(mytest, "matrix"))
-mypred = rep(NA, length(tmp.y))
-for (i in 1:length(tmp.y))
+tmp.y  = as.vector( as( mytest, "matrix" ) )
+mypred = rep( NA, length( tmp.y ) )
+
+for ( i in 1:length( tmp.y ) )
 {
-  if (is.na(tmp.y[i]))
+  if ( is.na( tmp.y[i] ) )
   {
     current_movie_sim = sim_mat[i,]
     
-    sim_mult_rating = tmp.y*current_movie_sim
-    non_null_sims = sim_mult_rating/tmp.y
-    mypred[i] = sum(sim_mult_rating, na.rm = TRUE)/sum(non_null_sims, na.rm = TRUE)
+    sim_mult_rating = tmp.y * current_movie_sim
+    non_null_sims   = sim_mult_rating / tmp.y
+    mypred[i]       = sum( sim_mult_rating, na.rm = TRUE ) / 
+                                                  sum( non_null_sims, na.rm = TRUE)
   }
 }
-```
 
-Finally, the ratings are set to NA in our output vector for movies that the test user had already rated. Additionally, the test user's original ratings average is added back to the outputted vector of predicted ratings.
+The estimate contains ratings for all movie pairs in the neighborhood - including those already rated by the active user. To remedy the issue, entries already rated by the active user are set to NA, and the rating means computed in the normalization step are restored.
 
-```{r}
+(original): Finally, the ratings are set to NA in our output vector for movies that the test user had already rated. Additionally, the test user's original ratings average is added back to the outputted vector of predicted ratings.
+
+{r}
 # Step 5: Add back mean for the test user
 mypred = mypred + test_mean
-already_rated = which(!is.na(as(mytest, "matrix")))
-mypred[already_rated] = NA
-```
+already_rated = which( !is.na( as( mytest, "matrix" ) ) )
+mypred[ already_rated ] = NA
 
-At this point, our IBCF model is complete and can be compared to recommenderlab's IBCF model with the same parameters. 
+(original): At this point, our IBCF model is complete and can be compared to recommenderlab's IBCF model with the same parameters.
 
-```{r}
-recommender.IBCF <- Recommender(train, method = "IBCF",
-                                parameter = list(normalize = 'center', 
-                                                 method = 'Cosine', 
-                                                 k = 30))
+{r}
+recommender.IBCF <- Recommender(
+  train, 
+  method = "IBCF",
+  parameter = list( normalize = 'center', method = 'Cosine', k = N )
+)
 
-p.IBCF <- predict(recommender.IBCF, test, type="ratings")
-p.IBCF <- as.numeric(as(p.IBCF, "matrix"))
+p.IBCF <- predict( recommender.IBCF, test, type="ratings" )
+p.IBCF <- as.numeric( as( p.IBCF, "matrix" ) )
 
 ## first output: should be less than 10
-sum(is.na(p.IBCF) != is.na(mypred))  
+sum( is.na( p.IBCF ) != is.na( mypred ) )  
 
 ## second output: should be less than 10%
-mydiff = abs(p.IBCF - mypred)
-sum(mydiff[!is.na(mydiff)] > 1e-6) / sum(!is.na(mydiff)) 
-```
+mydiff = abs( p.IBCF - mypred )
+sum( mydiff[ !is.na(mydiff) ] > 1e-6 ) / sum( !is.na( mydiff ) ) 
 
-To suggest movies to the test user, the top 5 rated movies from the model's output can be selected.
+The 5 highest rated movies are selected and returned.
 
-```{r}
-top_5_movies = tail(order(mypred, decreasing = FALSE), 5)
-top_5_recommended_movies_UBCF = movies[top_5_movies,]
+(original): To suggest movies to the test user, the top 5 rated movies from the model's output can be selected.
+
+{r}
+top_5_movies = tail( order( mypred, decreasing = FALSE ), 5 )
+top_5_recommended_movies_UBCF = movies[ top_5_movies, ]
 top_5_recommended_movies_UBCF
-```
