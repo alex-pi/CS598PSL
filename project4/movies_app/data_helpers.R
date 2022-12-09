@@ -82,6 +82,10 @@ get_genres = function(movies) {
   return(sort(distinct_genres))
 }
 
+read_genres = function() {
+  read.csv("MovieData/genres.dat")$x
+}
+
 get_top_by_genre = function(movies) {
   movies_ratings = left_join(movies, ratings, by = "MovieID")
   movies_avg_ratings = movies_ratings %>% 
@@ -102,9 +106,13 @@ get_top_by_genre = function(movies) {
                                    by = "MovieID")
 }
 
+read_top_genres = function() {
+  read.csv("MovieData/top_genre.dat")
+}
+
 movies = get_movies_data()
 ratings = get_ratings_data()
 users = get_users_data()
-top.genre = get_top_by_genre(movies)
+top.genre = read_top_genres()#get_top_by_genre(movies)
 
 

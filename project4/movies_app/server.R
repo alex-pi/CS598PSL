@@ -28,6 +28,7 @@ render_results = function(recom_result, id_movs_rated = c(), num_rows = 2, num_m
   
   num_recom = ifelse(is.null(recom_result), 0, dim(recom_result)[1])
   sprintf("\n Recomendations: %d\n", num_recom) %>% cat()
+  recom_ids = c()
   
   ## Remove user rated movies from recoms.
   #id_movs_rated = c(3114, 1)
@@ -36,13 +37,16 @@ render_results = function(recom_result, id_movs_rated = c(), num_rows = 2, num_m
     print(id_movs_rated)
     recom_result = recom_result[!recom_result$MovieID %in% id_movs_rated, ]
     num_recom = dim(recom_result)[1]
+    recom_ids = recom_result$MovieID
     #print(recom_result)
   }
   
   # Complete recoms with top movie picks
   if(num_recom < (num_rows * num_movies_row)) {
-    # When filling in recoms, also remove user rated movies from top.genre
-    top.genre = top.genre[!top.genre$MovieID %in% id_movs_rated, ]
+    # When filling in recoms, also remove user rated movies from top.genre.
+    # Also avoid adding movies already in recom_result
+    ids_to_remove = c(recom_ids, id_movs_rated)
+    top.genre = top.genre[!top.genre$MovieID %in% ids_to_remove, ]
     num_top_movies = dim(top.genre)[1]
     num_missing = (num_rows * num_movies_row) - num_recom
     sprintf("\n# Extra recommendatios: %d", num_missing) %>% cat()
@@ -76,7 +80,7 @@ shinyServer(function(input, output, session) {
 
   # show the list of genres
   output$genres <- renderUI({
-    genres = get_genres(movies)
+    genres = read_genres()
     selectInput("genre_sel", "Choose a genre:", genres)    
   })
   
