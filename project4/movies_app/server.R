@@ -24,19 +24,30 @@ get_user_ratings = function(value_list) {
   dat = dat[Rating > 0]
 }
 
-render_results = function(recom_result, num_rows = 2, num_movies_row = 5) {
-  ### TODO, fix case < 10
-  #print(recom_result)
+render_results = function(recom_result, id_movs_rated = c(), num_rows = 2, num_movies_row = 5) {
+  
   num_recom = ifelse(is.null(recom_result), 0, dim(recom_result)[1])
-  num_movies = dim(movies)[1]
-  sprintf("\n# Recomendations: %d", dim(recom_result)[1]) %>% cat()
+  sprintf("\n Recomendations: %d\n", num_recom) %>% cat()
+  
+  ## Remove user rated movies from recoms.
+  #id_movs_rated = c(3114, 1)
+  if(num_recom > 0) {
+    print("User ratings to be removed from recommendatios (movie ids):")
+    print(id_movs_rated)
+    recom_result = recom_result[!recom_result$MovieID %in% id_movs_rated, ]
+    num_recom = dim(recom_result)[1]
+    #print(recom_result)
+  }
   
   # Complete recoms with top movie picks
   if(num_recom < (num_rows * num_movies_row)) {
+    # When filling in recoms, also remove user rated movies from top.genre
+    top.genre = top.genre[!top.genre$MovieID %in% id_movs_rated, ]
+    num_top_movies = dim(top.genre)[1]
     num_missing = (num_rows * num_movies_row) - num_recom
-    sprintf("\n# Extra recoms: %d", num_missing) %>% cat()
-    idx_miss = sample(1:num_movies, num_missing)
-    recom_result = bind_rows(recom_result, movies[idx_miss, ])
+    sprintf("\n# Extra recommendatios: %d", num_missing) %>% cat()
+    idx_miss = sample(1:num_top_movies, num_missing)
+    recom_result = bind_rows(recom_result, top.genre[idx_miss, ])
     #print(recom_result)
   }
   
@@ -71,17 +82,21 @@ shinyServer(function(input, output, session) {
   
   df2 <- eventReactive(input$btng, {
     withBusyIndicatorServer("btng", {
-      
+
       preds = top.genre[top.genre$Genres == input$genre_sel,]
-      #preds[1,]$Title
     })
   })
   
   output$resultsg <- renderUI({
     recom_result <- df2()
-    #print(recom_result$Title)
     
-    render_results(recom_result)
+    # user ratings are also removed from results
+    # for by genre recommendations
+    rated_ids = NULL
+    if(!is.null(session$userData$user_ratings)) {
+      rated_ids = session$userData$user_ratings$MovieID
+    }
+    render_results(recom_result, rated_ids)
   }) 
   
   # show the books to be rated
@@ -89,10 +104,10 @@ shinyServer(function(input, output, session) {
     num_rows <- 20
     num_movies <- 6 # movies per row
     
-    s.movies = movies
+    #s.movies = movies
     # Start with a random set of movies
-    #s.movies = sample(1:dim(movies)[1], num_rows*num_movies)
-    #s.movies = movies[s.movies, ]
+    s.movies = sample(1:dim(movies)[1], num_rows*num_movies)
+    s.movies = movies[s.movies, ]
     
     lapply(1:num_rows, function(i) {
       list(fluidRow(lapply(1:num_movies, function(j) {
@@ -122,7 +137,8 @@ shinyServer(function(input, output, session) {
       # get the user's rating data
       value_list <- reactiveValuesToList(input)
       user_ratings <- get_user_ratings(value_list)
-      print(user_ratings)
+      session$userData$user_ratings = user_ratings
+      #print(user_ratings)
       
       #preds = naive1_recom(user_ratings, movies)
       preds = ibcf_recom(user_ratings, movies, ratings)
@@ -141,8 +157,7 @@ shinyServer(function(input, output, session) {
     num_rows <- 2
     num_movies <- 5
     recom_result <- df()
-    
-    render_results(recom_result)
+    render_results(recom_result, session$userData$user_ratings$MovieID)
   }) # renderUI function
   
 }) # server function

@@ -39,7 +39,7 @@ ibcf_recom = function(user_ratings, movies, ratings) {
   
   predictions$Rank = 1:dim(predictions)[1]
   
-  #sprint(predictions)
+  #print(predictions)
   print("Finished IBCF")
   return(predictions)
 }

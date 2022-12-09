@@ -46,7 +46,7 @@ get_movies_data = function() {
   # extract year
   movies$Year = as.numeric(unlist(
     lapply(movies$Title, function(x) substr(x, nchar(x)-4, nchar(x)-1))))  
-  print(movies[1,])
+
   return(movies)
 }
 

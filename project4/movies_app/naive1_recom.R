@@ -40,7 +40,7 @@ naive1_recom = function(user_ratings, movies) {
   
   predictions$Rank = 1:dim(predictions)[1]
   
-  print(predictions)
+  #print(predictions)
   
   print("Finished Naive.")
   predictions
