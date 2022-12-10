@@ -1,25 +1,26 @@
 ---
 title: "Project 4"
-author: "Tyler Zender"
-date: "11/27/2022"
-output: html_document
+author: 
+ - Tyler Zender (netID tzender2)
+ - Matthew Lind (netID lind6)
+ - Alejandro Pimentel (netID ap41,UIN 659282110)
+date: "12/11/2022"
+output:
+  html_document: 
+    theme: readable
+    toc: yes
+    toc_float: TRUE
+    code_folding: show
+    code_download: true
 ---
 
-## CS598 Practical Statistical Learning
+# CS598 Practical Statistical Learning
 
 Fall 2022
 
 ## Project 4 - Movie Recommendation
 
-December 11, 2022
-
-Tyler Zender (tzender2)
-
-Alejandro Pimental (ap41)
-
-Matthew Lind (lind6)
-
-## **Introduction:**
+## Introduction:
 
 The data set for this project contains about 1 million anonymous ratings of approximately 3,900 movies made by 6,040 MovieLens users who joined MovieLens in 2000. The goal was to recommend movies to the active user of the recommendation system based on ratings provided by the other users.
 
