@@ -38,7 +38,7 @@ The data is loaded and processed as follows:
 knitr::opts_chunk$set( echo = TRUE )
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library( dplyr )
 library( ggplot2 )
 library( recommenderlab )
@@ -258,7 +258,6 @@ The premise of this model is users who issued similar ratings for movies-in-comm
 To demonstrate, we limit training data to the first 500 rows (users), and designate a single row from the remaining data as the active user.
 
 ```{r}
-library( recommenderlab )
 
 myurl = "https://liangfgithub.github.io/MovieData/"
 
@@ -386,7 +385,7 @@ IBCF is a model-based algorithm where the recommendation is based on a subset of
 Using the same data set, we limit the training data to the first 500 rows (users) and designate the 501st row as the active user.
 
 ```{r}
-library( recommenderlab )
+
 myurl = "https://liangfgithub.github.io/MovieData/"
 ratings = read.csv(
   paste0( myurl, 'ratings.dat?raw=true' ), 
