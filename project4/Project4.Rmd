@@ -500,6 +500,6 @@ top_5_recommended_movies_UBCF
 
 Tyler Zender: System I/II models
 
-Alejandro Pimental: Shiny app integration
+Alejandro Pimentel: Shiny app integration
 
 Matthew Lind: Written report, code verification.

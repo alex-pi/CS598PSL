@@ -50,10 +50,22 @@ render_results = function(recom_result, id_movs_rated = c(), num_rows = 2, num_m
     num_top_movies = dim(top.genre)[1]
     num_missing = (num_rows * num_movies_row) - num_recom
     sprintf("\n# Extra recommendatios: %d", num_missing) %>% cat()
-    idx_miss = sample(1:num_top_movies, num_missing)
-    recom_result = bind_rows(recom_result, top.genre[idx_miss, ])
-    #print(recom_result)
+    
+    # Draw by MovieID to avoid duplicates since a movie can be top on more
+    # than one genre.
+    top.genre.uniq = top.genre %>% 
+      distinct(MovieID, .keep_all = T)
+    #idmov_miss= sample(unique(top.genre$MovieID), num_missing, replace = F)
+    idx_miss = sample(1:dim(top.genre.uniq)[1], num_missing)
+    
+    top.genre.uniq$Predicted_rating = top.genre.uniq$AvgRating
+    recom_result = bind_rows(recom_result, 
+                             top.genre.uniq[idx_miss, ])
+    recom_result = recom_result %>%
+      arrange(desc(Predicted_rating))     
   }
+
+  print(recom_result)
   
   lapply(1:num_rows, function(i) {
     list(fluidRow(lapply(1:num_movies_row, function(j) {
@@ -105,13 +117,13 @@ shinyServer(function(input, output, session) {
   
   # show the books to be rated
   output$ratings <- renderUI({
-    num_rows <- 20
+    num_rows <- 40
     num_movies <- 6 # movies per row
     
-    #s.movies = movies
+    s.movies = movies
     # Start with a random set of movies
-    s.movies = sample(1:dim(movies)[1], num_rows*num_movies)
-    s.movies = movies[s.movies, ]
+    #s.movies = sample(1:dim(movies)[1], num_rows*num_movies)
+    #s.movies = movies[s.movies, ]
     
     lapply(1:num_rows, function(i) {
       list(fluidRow(lapply(1:num_movies, function(j) {
@@ -137,16 +149,16 @@ shinyServer(function(input, output, session) {
       useShinyjs()
       jsCode <- "document.querySelector('[data-widget=collapse]').click();"
       runjs(jsCode)
-      
+        
       # get the user's rating data
       value_list <- reactiveValuesToList(input)
       user_ratings <- get_user_ratings(value_list)
       session$userData$user_ratings = user_ratings
-      #print(user_ratings)
+      print(user_ratings)
       
       #preds = naive1_recom(user_ratings, movies)
       preds = ibcf_recom(user_ratings, movies, ratings)
-      recom_results <- data.table(Rank = preds$Rank, 
+      recom_results <- data.table(#Rank = preds$Rank, 
                                   MovieID = preds$MovieID, 
                                   Title = preds$Title, 
                                   Predicted_rating = preds$Rating
