@@ -16,11 +16,11 @@ path_resolver = (function(isRemote=TRUE) {
   }
   
   local = list(
-    # I could not make images load locally.
-    #img = function(x) paste0(small_image_path, x, '.jpg'),
+    # To load images locally they need to be under www/MovieImages folder.
+    # img = function(x) paste0(small_image_path, x, '.jpg'),
     img = function(x) paste0(small_image_url, x, '.jpg?raw=true'),
     mov = paste0(movies_data_path, 'movies.dat'),
-    #rat = paste0(movies_data_path, 'ratings.dat'),
+    # Load ratings from a zip
     rat = unz(paste0(movies_data_path, 'ratings.zip'), 'ratings.dat'),
     usr = paste0(movies_data_path, 'users.dat')
   )

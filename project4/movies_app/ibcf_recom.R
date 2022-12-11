@@ -1,8 +1,11 @@
 
 ibcf_recom = function(user_ratings, movies, ratings) {
   print("Started IBCF")
+  # Add ratings from to UI to the ratings matrix.
   ratings_agg = rbind(ratings[,1:3], user_ratings)
   
+  # Create a sparse matrix with users as rows and movies as columns.
+  # i,j is the rating of user i for movie j.
   i = paste0('u', ratings_agg$UserID)
   j = paste0('m', ratings_agg$MovieID)
   x = ratings_agg$Rating
@@ -12,7 +15,9 @@ ibcf_recom = function(user_ratings, movies, ratings) {
   colnames(Rmat) = levels(tmp$j)
   Rmat = new('realRatingMatrix', data = Rmat)
   
+  # Due to memory issues we limit IBCF to ratings of 500 users.
   train = Rmat[2:501, ]
+  # First user in the matrix corresponds to the ratings given in the UI.
   test = Rmat[1, ]
   
   num_rates = dim(Rmat)[2]
@@ -36,9 +41,9 @@ ibcf_recom = function(user_ratings, movies, ratings) {
   
   predictions = data.frame(MovieID=movie_preds$MovieID, 
                            Title=movie_preds$Title,
-                           Rating=p.ratings)
+                           Predicted_rating=p.ratings)
   predictions = predictions %>%
-    arrange(desc(Rating))
+    arrange(desc(Predicted_rating))
 
   #print(predictions)
   print("Finished IBCF")

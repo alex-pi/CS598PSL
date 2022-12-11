@@ -10,7 +10,6 @@ library(tidyverse)
 library(Matrix)
 library(proxy)
 source('data_helpers.R')
-#source('naive1_recom.R')
 source('ibcf_recom.R')
 
 get_user_ratings = function(value_list) {
@@ -27,11 +26,10 @@ get_user_ratings = function(value_list) {
 render_results = function(recom_result, id_movs_rated = c(), num_rows = 2, num_movies_row = 5) {
   
   num_recom = ifelse(is.null(recom_result), 0, dim(recom_result)[1])
-  sprintf("\n Recomendations: %d\n", num_recom) %>% cat()
+  sprintf("\n # of Recomendations: %d\n", num_recom) %>% cat()
   recom_ids = c()
   
   ## Remove user rated movies from recoms.
-  #id_movs_rated = c(3114, 1)
   if(num_recom > 0) {
     print("User ratings to be removed from recommendatios (movie ids):")
     print(id_movs_rated)
@@ -58,6 +56,7 @@ render_results = function(recom_result, id_movs_rated = c(), num_rows = 2, num_m
     #idmov_miss= sample(unique(top.genre$MovieID), num_missing, replace = F)
     idx_miss = sample(1:dim(top.genre.uniq)[1], num_missing)
     
+    # Sort by rating after adding extra recommendations.
     top.genre.uniq$Predicted_rating = top.genre.uniq$AvgRating
     recom_result = bind_rows(recom_result, 
                              top.genre.uniq[idx_miss, ])
@@ -96,15 +95,12 @@ shinyServer(function(input, output, session) {
     selectInput("genre_sel", "Choose a genre:", genres)    
   })
   
-  df2 <- eventReactive(input$btng, {
-    withBusyIndicatorServer("btng", {
-
-      preds = top.genre[top.genre$Genres == input$genre_sel,]
-    })
+  df_genre2 <- eventReactive(input$genre_sel, {
+    preds = top.genre[top.genre$Genres == input$genre_sel,]
   })
   
   output$resultsg <- renderUI({
-    recom_result <- df2()
+    recom_result <- df_genre2()
     
     # user ratings are also removed from results
     # for by genre recommendations
@@ -143,7 +139,7 @@ shinyServer(function(input, output, session) {
   })
   
   # Calculate recommendations when the sbumbutton is clicked
-  df <- eventReactive(input$btn, {
+  df_rating <- eventReactive(input$btn, {
     withBusyIndicatorServer("btn", { # showing the busy indicator
       # hide the rating container
       useShinyjs()
@@ -158,10 +154,10 @@ shinyServer(function(input, output, session) {
       
       #preds = naive1_recom(user_ratings, movies)
       preds = ibcf_recom(user_ratings, movies, ratings)
-      recom_results <- data.table(#Rank = preds$Rank, 
+      recom_results <- data.table(
                                   MovieID = preds$MovieID, 
                                   Title = preds$Title, 
-                                  Predicted_rating = preds$Rating
+                                  Predicted_rating = preds$Predicted_rating
                                   )
       
     }) # still busy
@@ -172,7 +168,7 @@ shinyServer(function(input, output, session) {
   output$results <- renderUI({
     num_rows <- 2
     num_movies <- 5
-    recom_result <- df()
+    recom_result <- df_rating()
     render_results(recom_result, session$userData$user_ratings$MovieID)
   }) # renderUI function
   

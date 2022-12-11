@@ -10,7 +10,7 @@ source('functions/helpers.R')
 
 shinyUI(
     dashboardPage(
-          skin = "blue",
+          skin = "yellow",
           dashboardHeader(title = "Movie Recommender"),
           
           dashboardSidebar(    sidebarMenu(
@@ -33,14 +33,9 @@ shinyUI(
                         useShinyjs(),
                         box(
                           width = 12, status = "info", solidHeader = TRUE,
-                          title = "Step 2: Discover movies you might like",
-                          br(),
-                          withBusyIndicatorUI(
-                            actionButton("btng", "Click here to get your recommendations", class = "btn-warning")
-                          ),
+                          title = "Step 2: See recommendations by genre.",
                           br(),
                           tableOutput("resultsg")
-                          #textOutput("resultsg")
                         )
                       )
               ),              
