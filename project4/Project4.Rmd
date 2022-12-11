@@ -20,14 +20,12 @@ Fall 2022
 
 ## Project 4 - Movie Recommendation
 
-## Introduction:
-
 The data set for this project contains about 1 million anonymous ratings of approximately 3,900 movies made by 6,040 MovieLens users who joined MovieLens in 2000. The goal was to recommend movies to the active user of the recommendation system based on ratings provided by the other users.
 
 The data is organized in multiple files as follows:
 
 | File        | Description                                                                       |
-|----------------|--------------------------------------------------------|
+|--------------------|----------------------------------------------------|
 | movies.dat  | Title and genre for all movies in the database.                                   |
 | users.dat   | Movie reviewers with basic demographic information such as age group, gender, ... |
 | ratings.dat | Ratings for each rated movie provided by users                                    |
@@ -53,7 +51,7 @@ library( Matrix )
 library( proxy )
 ```
 
-The ratings data is loaded and organized into a table with labeled columns.
+Ratings data is loaded from ratings.dat and stored in a table with labeled columns as shown.
 
 ```{r}
 myurl = "https://liangfgithub.github.io/MovieData/"
@@ -69,7 +67,7 @@ ratings = read.csv(
 colnames( ratings ) = c( 'UserID', 'MovieID', 'Rating', 'Timestamp' )
 ```
 
-Movie data is loaded into a table and data is cleaned as some movie titles contain special characters which can create difficulties.
+Movie data is loaded from movies.dat and stored in a table with columns 'MovieID', 'Title', 'Genres', and 'Year' with the year extracted from the movie title. The movie titles are re-encoded as some contain special characters which can create difficulties when comparing strings or other processing.
 
 ```{r}
 movies = readLines( paste0( myurl, 'movies.dat?raw=true' ) )
@@ -94,13 +92,13 @@ movies$Year = as.numeric(
 
 ## System I: Recommendation based on movie genre
 
-In this section we devise techniques to identify and recommend movies based on popularity within a genre. We define popularity as the highest average rating provided by users who have rated the movie. The first method organizes movies by genre, then selects the most popular movies in each genre. The second method recognizes there may be different interpretations and methodologies employed to rate the movies. We attempt to account for these idiosyncrasies by adjusting the movie ratings prior to ranking and selection.
+In this section we employ techniques to identify and recommend movies based on popularity within a genre. We define popularity as the highest average rating provided by users who have rated the movie. The first method organizes movies by genre, then selects the most popular movies in each genre. The second method recognizes there may be different interpretations and methodologies employed to rate the movies. We attempt to account for these idiosyncrasies by adjusting the movie ratings prior to ranking and selection.
 
 ### Version 1: Naive Approach
 
-A simple approach to recommending movies would be to average the user's ratings, then select the highest rated movies in the genre.
+A simple approach to recommending movies is to average the user's ratings, then select the most popular movies in the genre.
 
-First, we collect information about all the different genre types
+First, we collect information about all the different genres.
 
 ```{r}
 genres_col = movies$Genres
@@ -111,16 +109,19 @@ for ( i in 1:length( genres_col ) ) {
   split_genres     = unlist( strsplit( single_genre_set, "|", fixed=TRUE ) )
   distinct_genres  = union( split_genres, distinct_genres )
 }
+distinct_genres
 ```
 
-Next, we define 'popular' for each genre as the highest rated movies with at least 5 ratings.
+Next, we collect all movie ratings from the database, compute the average rating per movie, then use the average rating to select the 5 most popular movies in each genre.
 
 ```{r}
+# get every rating for movies in the database
 movies_ratings = left_join( movies, ratings, by="MovieID" )
 movies_ratings = movies_ratings %>% 
   group_by( MovieID ) %>% 
   filter( n() >= 5 )
 
+# compute mean average rating for each movie
 movies_avg_ratings = movies_ratings %>% 
   group_by( MovieID ) %>% 
   summarise_at( vars( Rating ), list( AvgRating = mean ) )
@@ -134,6 +135,7 @@ movies_avg_ratings = movies_avg_ratings %>%
   separate_rows( Genres, sep='\\|' ) %>% 
   arrange( Genres, desc( AvgRating ) )
 
+# select 5 most popular movies in each genre
 top_movies_per_genre = movies_avg_ratings %>% 
   group_by( Genres ) %>% 
   slice_max( order_by=AvgRating, n=5 )
@@ -143,6 +145,9 @@ top_movies_per_genre = left_join(
   movies[, c( "MovieID", "Title", "Year")], 
   by = "MovieID"
 )
+
+# display results
+top_movies_per_genre
 ```
 
 We test this approach with a user's ratings.
@@ -167,7 +172,7 @@ top_movies_per_genre %>% filter( Genres == top_genre_user1 )
 
 ### Version 2: User-Normalized Ratings
 
-A limitation of the naive approach is it assumes users rate movies using the same criteria (i.e. users who enjoy a movie or genre to an identical degree would give the same rating). It is not uncommon for users to have different interpretations even when using the same scoring system. The differences introduce bias to the ratings for movies they have seen. Therefore, we center each user's set of ratings by subtracting the mean rating of the set so the composition of all ratings is more consistent.
+A limitation of the naive approach is it assumes users rate movies using the same criteria (i.e. users who enjoy a movie or genre to an identical degree would give the same rating). It is not uncommon for users to have different interpretations even when using the same scoring system. The differences introduce bias to the ratings for movies they have seen. Therefore, we center each user's set of ratings by subtracting the mean of the rating set so the composition of all ratings is more consistent.
 
 ```{r}
 movies_ratings = left_join( movies, ratings, by="MovieID" )
@@ -183,7 +188,7 @@ movies_ratings = movies_ratings %>% mutate( NormalizedRating = Rating - AvgRatin
 We now have a set of ratings centered with respect to the user's mean rating value. Next, we define 'popular' for each genre as the highest rated movies with at least 5 ratings.
 
 ```{r}
-
+# get all movie ratings from the database
 movies_ratings = movies_ratings %>% 
   group_by( MovieID ) %>% 
   filter( n() >= 5 )
@@ -198,10 +203,12 @@ movies_avg_ratings = left_join(
   by = "MovieID"
 )
 
+# compute mean average rating for each movie
 movies_avg_ratings = movies_avg_ratings %>% 
   separate_rows( Genres, sep='\\|') %>% 
   arrange( Genres, desc( AvgRating ) )
 
+# select 5 most popular movies in each genre
 top_movies_per_genre = movies_avg_ratings %>% 
   group_by( Genres ) %>% 
   slice_max( order_by=AvgRating, n=5 )
@@ -211,6 +218,8 @@ top_movies_per_genre = left_join(
   movies[, c( "MovieID", "Title", "Year" ) ], 
   by = "MovieID"
 )
+
+top_movies_per_genre
 ```
 
 Choosing a user from the set, we test the approach with a user's ratings.
@@ -225,6 +234,7 @@ ratings_user1 = ratings_user1 %>%
   slice_max( order_by=AvgRating, n=1 )
 
 top_genre_user1 = ratings_user1$Genres
+paste( "Genre:", top_genre_user1 )
 ```
 
 `top_genre_user1` is the top genre for this user, for which we suggest the 5 most popular movies.
@@ -235,7 +245,7 @@ top_movies_per_genre %>% filter( Genres == top_genre_user1 )
 
 ## System II: Collaborative Filtering Models
 
-In this section we explore movie recommendation using more complex models based on collaborative filtering. Collaborative filtering is a method of cross referencing data-in-common for specified attributes, then ranking it according to a similarity score. This first model is User-Based Collaborative Filtering (UBCF), a memory-based algorithm which utilizes a nearest-neighbors approach between users to give recommendations. The second model is Item-Based Collaborative Filtering (IBCF), a model-based algorithm which operates similar to UBCF in many ways, but measures similarity between movies instead of users while operating on a subset of the data for better scalability.
+In this section we explore movie recommendation using more complex models based on *collaborative filtering*. Collaborative filtering is a method of cross referencing data-in-common for specified attributes, then ranking it according to a similarity score. This first model is User-Based Collaborative Filtering (UBCF), a memory-based algorithm which utilizes a nearest-neighbors approach between users to give recommendations. The second model is Item-Based Collaborative Filtering (IBCF), a model-based algorithm which operates similar to UBCF in many ways, but measures similarity between movies instead of users while operating on a subset of the data for better scalability.
 
 Ratings are stored in a u x m matrix *Rmat* where each row (u) represents a user, and each column (m) a movie. Each entry Rmat[u,m] is an integer rating in range [1...5] issued by user *u* for movie *m*, or *NA* if the user has not yet rated the movie.
 
@@ -281,10 +291,10 @@ mytrain = train
 mytest  = test
 ```
 
-The first step is to normalize the data as users tend to rate movies according to their own methodology. Users with similar opinion will not necessarily assign the same numeric value as a rating. To reduce bias, each user's ratings are centered on the mean of their ratings set.
+Users tend to rate movies according to their own methodology. Users with similar opinion will not necessarily assign the same numeric value as a rating. To reduce these deviant tendencies, we use the normalize function to center each user's ratings on the mean of their ratings set.
 
 ```{r}
-# Step 1: Normalize both the train and test datasets
+# Step 1: Center both the train and test datasets
 mytrain   = normalize( mytrain, method="center", row=TRUE )
 test_mean = rowMeans( mytest )
 mytest    = normalize( mytest, method="center", row=TRUE )
@@ -296,7 +306,7 @@ A similarity vector is computed using *cosine similarity* which is calculated be
 # Step 2: Similarity
 sim = similarity( mytrain, mytest, method='cosine', which="users" )
 
-# Step 3: Top N
+# Step 3: Top N most similar users
 N = 20
 top_20_similarity_values     = tail( sort( sim ), N )
 top_20_lower_bound           = top_20_similarity_values[1]
@@ -325,13 +335,15 @@ averaged_ratings_for_top_20_similar_users =
 averaged_ratings_for_top_20_similar_users[ na_idxs ] = NA 
 ```
 
-The estimate contains predictions for all movies from users in the neighborhood - including movies already rated by the active user. To remedy the issue, movies in the estimate already rated by the active user are set to NA, while the rating means computed in the normalization step are applied to restore the original ratings.
+The estimate contains predictions for all movies from users in the neighborhood. Movies in the estimate already rated by the active user are set to NA, while the means of the ratings sets computed in the centering step are applied to restore the original ratings.
 
 ```{r}
-# Step 5: Replace with NAs where already rated, add back user's mean
+# Step 5: Replace with NAs where already rated
 tmp.y = as.vector( as( mytest, "matrix" ) )
 ind.y = which( !is.na(tmp.y ) )
 averaged_ratings_for_top_20_similar_users[ ind.y ] = NA
+
+# apply user's ratings mean to restore original ratings
 averaged_ratings_for_top_20_similar_users = test_mean +
   averaged_ratings_for_top_20_similar_users
 
@@ -354,7 +366,7 @@ sum( is.na( p.UBCF ) != is.na( mypred ) )        # should be zero
 max( abs( p.UBCF - mypred ), na.rm = TRUE )      # should be less than 1e-06 
 ```
 
-The top 5 rated movies from the model are selected and returned.
+The 5 most popular movies from the model are selected and returned.
 
 ```{r}
 top_5_movies = tail( sort( mypred ),5 )
@@ -404,16 +416,16 @@ mytrain = train
 mytest  = test
 ```
 
-Data is normalized to reduce bias from idiosyncrasies in each user's rating methodology. Each user's ratings are centered on the mean of their rating set.
+To reduce bias from idiosyncrasies in each user's rating methodology, the normalize function is used to center each user's ratings on the mean of their rating set.
 
 ```{r}
-# Step 1: Normalize both the train and test datasets
+# Step 1: Center both the train and test datasets
 mytrain   = normalize( mytrain, method="center", row=TRUE )
 test_mean = rowMeans( mytest )
 mytest    = normalize( mytest, method="center", row=TRUE )
 ```
 
-A similarity vector is computed and resembles the one used in the UBCF model, but the cosine similarity is calculated between each pair of movies by taking all ratings into consideration. Similarity scores are highest when all users rate a pair of movies identically, and lowest when ratings vary greatly. The values returned by the computation are in range [-1...1] then transformed to range [0...1].
+A similarity vector is computed and resembles the one used in the UBCF model, but the cosine similarity is only calculated where users rated both movies in the pair. Similarity scores are highest when all users rate a pair of movies identically, and lowest when ratings vary greatly. The values returned by the computation are in range [-1...1] then transformed to range [0...1].
 
 ```{r}
 # Step 2: Compute similarities
@@ -459,10 +471,10 @@ for ( i in 1:length( tmp.y ) )
 }
 ```
 
-The estimate contains ratings for all movie pairs in the neighborhood. Entries already rated by the active user are set to NA, and the rating means computed in the normalization step are applied to restore the original rating values.
+The estimate contains ratings for all movie pairs in the neighborhood. The means computed in the centering step are applied to return ratings to their original range, then entries (movies) already rated by the active user are set to NA.
 
 ```{r}
-# Step 5: Add back mean for the active user
+# Step 5: Apply the mean for the active user
 mypred = mypred + test_mean
 already_rated = which( !is.na( as( mytest, "matrix" ) ) )
 mypred[ already_rated ] = NA
@@ -488,7 +500,7 @@ mydiff = abs( p.IBCF - mypred )
 sum( mydiff[ !is.na(mydiff) ] > 1e-6 ) / sum( !is.na( mydiff ) ) 
 ```
 
-The 5 highest rated movies are selected and returned.
+The 5 most popular movies are selected and returned.
 
 ```{r}
 top_5_movies = tail( order( mypred, decreasing = FALSE ), 5 )
@@ -500,6 +512,6 @@ top_5_recommended_movies_UBCF
 
 Tyler Zender: System I/II models
 
-Alejandro Pimentel: Shiny app integration
+Alejandro Pimental: Shiny app integration
 
 Matthew Lind: Written report, code verification.
