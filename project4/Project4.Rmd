@@ -504,13 +504,9 @@ sum( mydiff[ !is.na(mydiff) ] > 1e-6 ) / sum( !is.na( mydiff ) )
 The 5 most popular movies are selected and returned.
 
 ```{r}
-# top_5_movies = tail( order( mypred, decreasing = FALSE, na.last = FALSE ), 5 )
-#top_5_movies = head( order( p.IBCF, decreasing = TRUE, na.last = TRUE), 5 )
-# top_5_recommended_movies_IBCF = movies[ top_5_movies, ]
-# top_5_recommended_movies_IBCF
-
+names( mypred ) = colnames( Rmat )
 top_5_movies = tail( sort( mypred ), 5 )
-top_5_movies = row.names( as( top_5_movies, "matrix" ) )
+top_5_movies = names( top_5_movies )
 top_5_movies = strtoi( gsub( 'm', '', top_5_movies ) )
 top_5_recommended_movies_IBCF = movies %>% filter( MovieID %in% top_5_movies )
 top_5_recommended_movies_IBCF
