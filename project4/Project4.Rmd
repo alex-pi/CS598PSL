@@ -38,7 +38,7 @@ The data is loaded and processed as follows:
 knitr::opts_chunk$set( echo = TRUE )
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library( dplyr )
 library( ggplot2 )
 library( recommenderlab )
