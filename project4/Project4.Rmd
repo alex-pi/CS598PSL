@@ -1,5 +1,5 @@
 ---
-title: "Project 4 - CS598 Practical Statistical Learning"
+title: "Project 4"
 author: 
  - Tyler Zender (netID tzender2)
  - Matthew Lind (netID lind6)
@@ -25,7 +25,7 @@ The data set for this project contains about 1 million anonymous ratings of appr
 The data is organized in multiple files as follows:
 
 | File        | Description                                                                       |
-|---------------|---------------------------------------------------------|
+|-----------------|-------------------------------------------------------|
 | movies.dat  | Title and genre for all movies in the database.                                   |
 | users.dat   | Movie reviewers with basic demographic information such as age group, gender, ... |
 | ratings.dat | Ratings for each rated movie provided by users                                    |
@@ -38,7 +38,7 @@ The data is loaded and processed as follows:
 knitr::opts_chunk$set( echo = TRUE )
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r}
 library( dplyr )
 library( ggplot2 )
 library( recommenderlab )
@@ -260,17 +260,6 @@ To demonstrate, we limit training data to the first 500 rows (users), and design
 ```{r}
 library( recommenderlab )
 
-myurl = "https://liangfgithub.github.io/MovieData/"
-
-ratings = read.csv(
-  paste0( myurl, 'ratings.dat?raw=true' ), 
-  sep = ':',
-  colClasses = c( 'integer', 'NULL'), 
-  header = FALSE
-)
-
-colnames( ratings ) = c( 'UserID', 'MovieID', 'Rating', 'Timestamp' )
-
 i    = paste0( 'u', ratings$UserID  )
 j    = paste0( 'm', ratings$MovieID )
 x    = ratings$Rating
@@ -388,23 +377,6 @@ Using the same data set, we limit the training data to the first 500 rows (users
 
 ```{r}
 library( recommenderlab )
-myurl = "https://liangfgithub.github.io/MovieData/"
-ratings = read.csv(
-  paste0( myurl, 'ratings.dat?raw=true' ), 
-  sep = ':',
-  colClasses = c( 'integer', 'NULL'), 
-  header = FALSE 
-)
-
-colnames( ratings ) = c( 'UserID', 'MovieID', 'Rating', 'Timestamp' )
-i    = paste0( 'u', ratings$UserID  )
-j    = paste0( 'm', ratings$MovieID )
-x    = ratings$Rating
-tmp  = data.frame( i, j, x, stringsAsFactors = T )
-Rmat = sparseMatrix( as.integer( tmp$i ), as.integer( tmp$j ), x = tmp$x )
-rownames( Rmat ) = levels( tmp$i )
-colnames( Rmat ) = levels( tmp$j )
-Rmat = new( 'realRatingMatrix', data = Rmat )
 
 train = Rmat[1:500, ]
 test  = Rmat[501,   ]
@@ -512,10 +484,18 @@ top_5_recommended_movies_IBCF = movies %>% filter( MovieID %in% top_5_movies )
 top_5_recommended_movies_IBCF
 ```
 
+**Question**: *Why do we encounter such a big discrepancy for IBCF, but not for UBCF?*
+
+UBCF is a memory-based algorithm which computes predictions using the entirety of the ratings data. IBCF is a model-based algorithm which reduces the ratings data to a neighborhood (subset) of best candidates before computing predictions.
+
+When using IBCF, the number of highly rated movies with identical similarity scores (S) can exceed the neighborhood size (N) causing many qualified movies to be discarded and produce prediction error if the best choices were among the discarded. The amount of error will vary depending on a few factors, such as size of N, how many movies in S reside at the neighborhood boundary, and the proportion of S that intersects the neighborhood. \
+\
+As neighborhood size decreases, the likeliness movies in S will be discarded increases. Movies in S residing on the boundary compete for the last few positions available in the neighborhood and affect prediction depending on which movies are chosen in the tie breaker process. For example, if the neighborhood size is 30 and movies in S occupy positions 28 through 36 in the ranked similarity scores, the quality of prediction will come down to choice of which of the 8 movies earn the last 3 positions (28, 29, 30). If S is large but intersection with the neighborhood is small, then prediction error will likely increase as many candidates are competing for few positions. If the intersection is large, then error is reduced.
+
 ### Contributions:
 
 Tyler Zender: System I/II models
 
-Alejandro Pimentel: Shiny app integration
+Alejandro Pimental: Shiny app integration
 
 Matthew Lind: Written report, code verification.
