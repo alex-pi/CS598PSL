@@ -64,7 +64,7 @@ render_results = function(recom_result, id_movs_rated = c(), num_rows = 2, num_m
       arrange(desc(Predicted_rating))     
   }
 
-  print(recom_result)
+  #print(recom_result)
   
   lapply(1:num_rows, function(i) {
     list(fluidRow(lapply(1:num_movies_row, function(j) {
@@ -111,7 +111,7 @@ shinyServer(function(input, output, session) {
     render_results(recom_result, rated_ids)
   }) 
   
-  # show the books to be rated
+  # show the movies to be rated
   output$ratings <- renderUI({
     num_rows <- 40
     num_movies <- 6 # movies per row
@@ -153,13 +153,8 @@ shinyServer(function(input, output, session) {
       print(user_ratings)
       
       #preds = naive1_recom(user_ratings, movies)
-      preds = ibcf_recom(user_ratings, movies, ratings)
-      recom_results <- data.table(
-                                  MovieID = preds$MovieID, 
-                                  Title = preds$Title, 
-                                  Predicted_rating = preds$Predicted_rating
-                                  )
-      
+      preds = ibcf_recom(test.ratings, movies, ratings)
+
     }) # still busy
     
   }) # clicked on button

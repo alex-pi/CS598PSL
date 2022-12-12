@@ -1,5 +1,5 @@
 ---
-title: "Project 4"
+title: "Project 4 - CS598 Practical Statistical Learning"
 author: 
  - Tyler Zender (netID tzender2)
  - Matthew Lind (netID lind6)
@@ -516,6 +516,6 @@ top_5_recommended_movies_IBCF
 
 Tyler Zender: System I/II models
 
-Alejandro Pimental: Shiny app integration
+Alejandro Pimentel: Shiny app integration
 
 Matthew Lind: Written report, code verification.

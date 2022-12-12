@@ -1,8 +1,10 @@
 
 ibcf_recom = function(user_ratings, movies, ratings) {
   print("Started IBCF")
+  if(dim(user_ratings)[1] == 0)
+    return(NULL)
   # Add ratings from to UI to the ratings matrix.
-  ratings_agg = rbind(ratings[,1:3], user_ratings)
+  ratings_agg = rbind(ratings[,1:3], user_ratings[,1:3])
   
   # Create a sparse matrix with users as rows and movies as columns.
   # i,j is the rating of user i for movie j.
@@ -33,18 +35,21 @@ ibcf_recom = function(user_ratings, movies, ratings) {
   am = as(p.IBCF, "matrix")
   p.IBCF = as.numeric(am)
   
-  p.movids = colnames(am)[which(!is.na(p.IBCF))]
+  valid_indices = which( !is.na( p.IBCF ))
+  
+  p.movids = colnames(am)[valid_indices]
   p.movids = strtoi( gsub('m', '', p.movids))
-  p.ratings = p.IBCF[!is.na(p.IBCF)]
+  p.ratings = p.IBCF[valid_indices]
   
-  movie_preds = movies %>% filter( MovieID %in% p.movids )
-  
-  predictions = data.frame(MovieID=movie_preds$MovieID, 
-                           Title=movie_preds$Title,
+  predictions = data.frame(MovieID=p.movids, 
                            Predicted_rating=p.ratings)
+  
   predictions = predictions %>%
     arrange(desc(Predicted_rating))
+  
+  predictions = left_join(predictions, movies, by="MovieID" )
 
+  #print("predictions from IBCF")
   #print(predictions)
   print("Finished IBCF")
   return(predictions)

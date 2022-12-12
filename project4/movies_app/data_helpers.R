@@ -17,8 +17,8 @@ path_resolver = (function(isRemote=TRUE) {
   
   local = list(
     # To load images locally they need to be under www/MovieImages folder.
-    # img = function(x) paste0(small_image_path, x, '.jpg'),
-    img = function(x) paste0(small_image_url, x, '.jpg?raw=true'),
+    img = function(x) paste0(small_image_path, x, '.jpg'),
+    #img = function(x) paste0(small_image_url, x, '.jpg?raw=true'),
     mov = paste0(movies_data_path, 'movies.dat'),
     # Load ratings from a zip
     rat = unz(paste0(movies_data_path, 'ratings.zip'), 'ratings.dat'),
@@ -86,6 +86,10 @@ read_genres = function() {
   read.csv("MovieData/genres.dat")$x
 }
 
+read_test_ratings = function() {
+  read.csv("MovieData/test_ratings.dat")
+}
+
 get_top_by_genre = function(movies) {
   movies_ratings = left_join(movies, ratings, by = "MovieID")
   movies_avg_ratings = movies_ratings %>% 
@@ -114,5 +118,6 @@ movies = get_movies_data()
 ratings = get_ratings_data()
 users = get_users_data()
 top.genre = read_top_genres()#get_top_by_genre(movies)
+test.ratings = read_test_ratings()
 
 
